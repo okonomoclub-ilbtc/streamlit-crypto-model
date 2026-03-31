@@ -103,30 +103,30 @@ if st.button('🚀 Entrenar y Predecir'):
             # Visualización
             col1, col2 = st.columns([2, 1])
             
-            with col1:
-                st.subheader("Gráfico de Predicción")
-                fig, ax = plt.subplots(figsize=(10,5))
-                ax.plot(df.index[-60:], df['Close'].iloc[-60:], label="Histórico")
-                ax.plot(future_dates, future_preds, label="IA Predicción", color='red', marker='o')
-                plt.xticks(rotation=45)
-                ax.legend()
-                st.pyplot(fig)
-
-            with col2:
+                       with col2:
                 st.subheader("Tendencia Próximos 7 Días")
-                last_price = df['Close'].iloc[-1]
+                # Extraemos el último precio como un número simple
+                last_price_val = df['Close'].iloc[-1]
+                if hasattr(last_price_val, 'item'): last_price_val = last_price_val.item()
+                
                 preds_flat = future_preds.flatten()
                 
                 res_list = []
-                temp_last = last_price
+                temp_last = last_price_val
+                
                 for d, p in zip(future_dates, preds_flat):
-                    trend = "🚀 ALZA" if p > temp_last else "📉 BAJA"
-                    res_list.append({"Fecha": d.strftime('%Y-%m-%d'), "Precio": f"${p:,.2f}", "Tendencia": trend})
-                    temp_last = p
+                    # Forzamos a que p sea un número flotante simple
+                    p_val = float(p)
+                    trend = "🚀 ALZA" if p_val > temp_last else "📉 BAJA"
+                    
+                    res_list.append({
+                        "Fecha": d.strftime('%Y-%m-%d'), 
+                        "Precio": f"${p_val:,.2f}", 
+                        "Tendencia": trend
+                    })
+                    temp_last = p_val # Actualizamos para la siguiente comparación
                 
                 st.table(pd.DataFrame(res_list))
-    else:
-        st.error("No hay suficientes datos. Intenta con una fecha de inicio más antigua o un símbolo válido.")
 
 # Desarrollado por: [@Bookbinderr]
 # App de Predicción de Criptomonedas con LSTM (streamlit-crypto-model)
