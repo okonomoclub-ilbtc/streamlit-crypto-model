@@ -2,6 +2,12 @@ streamlit
 yfinance
 pandas
 numpy
+plotly
 scikit-learn
-tensorflow
-matplotlib
+tensorflow-cpu==2.15.0
+feedparser
+
+
+
+
+
