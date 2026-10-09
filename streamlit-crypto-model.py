@@ -44,8 +44,10 @@ def despachar_alerta_telegram(mensaje):
 @st.cache_data(ttl=3600)
 def load_data_v10(ticker, days):
     try:
-        # Descarga elástica de datos históricos diarios sin desfase de zona horaria
-        df = yf.download(ticker, start=(pd.Timestamp.now() - pd.Timedelta(days=days)), progress=False, auto_adjust=True)
+        # CORRECCIÓN DE DESFASE: Normalizamos la fecha a la medianoche pura para evitar distorsión horaria
+        fecha_inicio = (pd.Timestamp.now() - pd.Timedelta(days=days)).normalize()
+        df = yf.download(ticker, start=fecha_inicio, progress=False, auto_adjust=True)
+
         if df.empty:
             return pd.DataFrame()
         if isinstance(df.columns, pd.MultiIndex):
@@ -54,15 +56,19 @@ def load_data_v10(ticker, days):
         # Filtro de Tendencia Intermedio (EMA 50)
         df['ema_50'] = df['Close'].ewm(span=50, adjust=False).mean()
 
-        # CORRECCIÓN OFF-BY-ONE: Cálculo preciso del Retorno de 3 velas cerradas consecutivas
+        # Cálculo preciso del Retorno de 3 velas cerradas consecutivas
         df['retorno_3d'] = df['Close'].pct_change(periods=3) * 100
 
-        # True Range y ATR de 14 para Dimensionamiento del Riesgo Controlado (0.5%)
+        # True Range y ATR de 14
         high_low = df['High'] - df['Low']
         high_cp = np.abs(df['High'] - df['Close'].shift(1))
         low_cp = np.abs(df['Low'] - df['Close'].shift(1))
         tr = pd.concat([high_low, high_cp, low_cp], axis=1).max(axis=1)
         df['atr'] = tr.rolling(14).mean()
+
+        # Eliminamos la última fila si el día de hoy no ha cerrado oficialmente en velas diarias de Yahoo Finance
+        if df.index[-1].date() == pd.Timestamp.now().date():
+            df = df.iloc[:-1]
 
         return df.dropna()
     except Exception:
@@ -99,10 +105,8 @@ else:
         "📖 Manual Operativo Sistemático"
     ])
 
-    # =========================================================================
-    # CORRECCIÓN DE SEGURIDAD CRÍTICA: FILTRO DE CONSOLIDACIÓN RÍGIDA
-    # =========================================================================
-    now = df.iloc[-2]
+    # Sincronización milimétrica: Evaluamos la última vela cerrada consolidada de la matriz purgada
+    now = df.iloc[-1]
     precio_actual = float(now['Close'])
     ret3d_actual = float(now['retorno_3d'])
     ema50_actual = float(now['ema_50'])
@@ -203,23 +207,23 @@ else:
                 ])
                 model.compile(optimizer='adam', loss='mse')
                 model.fit(X, y, epochs=epochs_n, batch_size=32, verbose=0)
-
+                
                 future_preds = []
                 current_batch = scaled_all[-60:].reshape(1, 60, 1)
                 for _ in range(7):
                     p = model.predict(current_batch, verbose=0)
                     future_preds.append(p)
                     current_batch = np.append(current_batch[:, 1:, :], p.reshape(1, 1, 1), axis=1)
-
                 preds_7d = scaler.inverse_transform(np.array(future_preds).reshape(-1, 1))
-                f_dates = [df.index[-1] + pd.Timedelta(days=i) for i in range(1, 8)]
-                fig_7d = go.Figure()
-                fig_7d.add_trace(go.Scatter(x=f_dates, y=preds_7d.flatten(), mode='lines+markers', name="Proyección IA", line=dict(color='#EF4444', width=3)))
-                fig_7d.update_layout(template="plotly_dark", title="Tendencia Proyectada Próximos 7 Días")
-                st.plotly_chart(fig_7d, use_container_width=True)
-                preds_flat = preds_7d.flatten()
-                pred_df = pd.DataFrame({'Fecha': f_dates, 'Precio Est.': preds_flat, 'Variación %': [f"{((p / precio_actual) - 1) * 100:+.2f}%" for p in preds_flat]})
-                st.table(pred_df.style.format({"Precio Est.": "${:,.2f}"}))
+                
+            f_dates = [df.index[-1] + pd.Timedelta(days=i) for i in range(1, 8)]
+            fig_7d = go.Figure()
+            fig_7d.add_trace(go.Scatter(x=f_dates, y=preds_7d.flatten(), mode='lines+markers', name="Proyección IA", line=dict(color='#EF4444', width=3)))
+            fig_7d.update_layout(template="plotly_dark", title="Tendencia Proyectada Próximos 7 Días")
+            st.plotly_chart(fig_7d, use_container_width=True)
+            preds_flat = preds_7d.flatten()
+            pred_df = pd.DataFrame({'Fecha': f_dates, 'Precio Est.': preds_flat, 'Variación %': [f"{((p / precio_actual) - 1) * 100:+.2f}%" for p in preds_flat]})
+            st.table(pred_df.style.format({"Precio Est.": "${:,.2f}"}))
 
     # --- PESTAÑA 3: BACKTEST ---
     with tab3:
@@ -245,7 +249,7 @@ else:
                         st.write(getattr(entry, 'summary', 'Despacho oficial disponible en Binance Feed.'))
                         st.link_button("Leer Noticia Completa en Binance", entry.link, key=f"ln_binance_{noticias_despachadas}")
                         noticias_despachadas += 1
-                if noticias_despachadas >= 5:
+                if noticias_despachadas >= 5: 
                     break
         else:
             st.info(" Sincronizando búfer alternativo de Binance Square...")
@@ -308,7 +312,7 @@ else:
         else:
             st.success(f"✅ Gestión Segura: Nivel de apalancamiento real requerido de {apalancamiento_requerido:.1f}x. Posición totalmente protegida.")
 
-    # --- PIE DE PÁGINA: CREDENCIALES Y EXPLICACIÓN DE RESPONSABILIDAD ---
-    st.markdown("---")
-    st.markdown(" QuantumTradeA 2026 | Desarrollado con rigor por @Bookbinderr-2026", unsafe_allow_html=True)
-    st.markdown("🚨 NOTA MARGINAL DE DESCARGO LEGAL: Esta aplicación web interactiva ha sido construida con fines estrictamente educativos, didácticos y de investigación estadística avanzada bajo la metodología de la ingeniería cuantitativa. Ninguno de los datos, alertas o fichas de órdenes recomendadas constituye una recomendación de inversión o asesoría financiera oficial. Los rendimientos pasados presentados en el registro de robustez no garantizan retornos futuros.", unsafe_allow_html=True)
+# --- PIE DE PÁGINA: CREDENCIALES Y EXPLICACIÓN DE RESPONSABILIDAD ---
+st.markdown("---")
+st.markdown("🛡️ QuantumTradeA 2026 | Desarrollado con rigor por @Bookbinderr-2026", unsafe_allow_html=True)
+st.markdown("🚨 NOTA MARGINAL DE DESCARGO LEGAL: Esta aplicación web interactiva ha sido construida con fines estrictamente educativos, didácticos y de investigación estadística avanzada bajo la metodología de la ingeniería cuantitativa. Ninguno de los datos, alertas o fichas de órdenes recomendadas constituye una recomendación de inversión o asesoría financiera oficial. Los rendimientos pasados presentados en el registro de robustez no garantizan retornos futuros.", unsafe_allow_html=True)
