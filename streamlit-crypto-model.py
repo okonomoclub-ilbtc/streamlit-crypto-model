@@ -136,9 +136,9 @@ else:
 
         # Confirmación de la posición del precio respecto a la EMA 50 
         if precio_actual > ema50_actual:
-            st.markdown(f"**FILTRO DE TENDENCIA AUTORIZADO**: El precio (${precio_actual:,.2f}) cotiza POR ENCIMA de la EMA 50 (${ema50_actual:,.2f}). [Filtro alcista validado 🚀]")
+            st.markdown(f"**FILTRO DE TENDENCIA AUTORIZADO**: El precio (${precio_actual:,.2f}) cotiza > EMA 50 (${ema50_actual:,.2f}). [Filtro alcista validado 🚀]")
         else:
-            st.markdown(f"**FILTRO DE TENDENCIA AUTORIZADO**: El precio (${precio_actual:,.2f}) cotiza POR DEBAJO de la EMA 50 (${ema50_actual:,.2f}). [Filtro bajista validado 🐻]")
+            st.markdown(f"**FILTRO DE TENDENCIA AUTORIZADO**: El precio (${precio_actual:,.2f}) cotiza < EMA 50 (${ema50_actual:,.2f}). [Filtro bajista validado 🐻]")
         
         st.write("") # Espacio estético
 
