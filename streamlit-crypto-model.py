@@ -134,12 +134,12 @@ else:
 
         st.subheader("📋 Estado Actual del Dictaminador Sentinel")
 
-        # Confirmación de la posición del precio respecto a la EMA 50 solicitada por el usuario
+        # Confirmación de la posición del precio respecto a la EMA 50 
         if precio_actual > ema50_actual:
-            posicion_ema_info = f"📈 FILTRO DE TENDENCIA AUTORIZADO: El precio (${precio_actual:,.2f}) cotiza POR ENCIMA de la EMA 50 (${ema50_actual:,.2f}). Filtro alcista validado."
+            posicion_ema_info = f"📈 FILTRO DE TENDENCIA AUTORIZADO: El precio (${precio_actual:,.2f}) cotiza > de la EMA 50 (${ema50_actual:,.2f}). Filtro alcista validado."
             st.success(posicion_ema_info)
         else:
-            posicion_ema_info = f"📉 FILTRO DE TENDENCIA AUTORIZADO: El precio (${precio_actual:,.2f}) cotiza POR DEBAJO de la EMA 50 (${ema50_actual:,.2f}). Filtro bajista validado."
+            posicion_ema_info = f"📉 FILTRO DE TENDENCIA AUTORIZADO: El precio (${precio_actual:,.2f}) cotiza < de la EMA 50 (${ema50_actual:,.2f}). Filtro bajista validado."
             st.error(posicion_ema_info)
 
         estado_senal = "😴 ESPERANDO SETUP CLARO (El precio cotiza en zona de ruido neutral)"
