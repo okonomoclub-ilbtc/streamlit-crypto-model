@@ -69,7 +69,7 @@ def load_data_v10(ticker, days=1500):
     df = df.tail(days)
     return df
 
-# --- INTERFAZ DE USUARIO (SIDEBAR) ORDENADA --- 
+# --- INTERFAZ DE USUARIO (SIDEBAR) ORDENADA ---
 st.sidebar.title("⚙️ Parámetros Sentinel V10")
 crypto = st.sidebar.selectbox("Activo de Análisis", ["BTC-USD", "ETH-USD", "SOL-USD"], index=0)
 history_days = st.sidebar.slider("Historial de Análisis (Días)", 500, 2000, 1500, step=100)
@@ -136,11 +136,11 @@ else:
 
         # Confirmación de la posición del precio respecto a la EMA 50 
         if precio_actual > ema50_actual:
-            posicion_ema_info = f"📈 FILTRO DE TENDENCIA AUTORIZADO: El precio (${precio_actual:,.2f}) cotiza > de la EMA 50 (${ema50_actual:,.2f}). Filtro alcista validado."
-            st.success(posicion_ema_info)
+            st.markdown(f"**FILTRO DE TENDENCIA AUTORIZADO**: El precio (${precio_actual:,.2f}) cotiza POR ENCIMA de la EMA 50 (${ema50_actual:,.2f}). [Filtro alcista validado 🚀]")
         else:
-            posicion_ema_info = f"📉 FILTRO DE TENDENCIA AUTORIZADO: El precio (${precio_actual:,.2f}) cotiza < de la EMA 50 (${ema50_actual:,.2f}). Filtro bajista validado."
-            st.error(posicion_ema_info)
+            st.markdown(f"**FILTRO DE TENDENCIA AUTORIZADO**: El precio (${precio_actual:,.2f}) cotiza POR DEBAJO de la EMA 50 (${ema50_actual:,.2f}). [Filtro bajista validado 🐻]")
+        
+        st.write("") # Espacio estético
 
         estado_senal = "😴 ESPERANDO SETUP CLARO (El precio cotiza en zona de ruido neutral)"
         tipo_op = None
