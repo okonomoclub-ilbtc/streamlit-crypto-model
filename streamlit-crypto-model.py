@@ -111,33 +111,9 @@ else:
     ret3d_actual = float(now['retorno_3d'].iloc[0]) if isinstance(now['retorno_3d'], pd.Series) else float(now['retorno_3d'])
     atr_actual = float(now['atr'].iloc[0]) if isinstance(now['atr'], pd.Series) else float(now['atr'])
 
-    # Reglas Binarias de la Sentinel V10 Pro
-    condicion_ema_long = precio_actual > ema50_actual
-    condicion_ret_long = ret3d_actual <= -3.0  # Caída extrema
-
-    condicion_ema_short = precio_actual < ema50_actual
-    condicion_ret_short = ret3d_actual >= 3.0  # Alza extrema
-
-    # Identificar el estado operativo
-    if condicion_ema_long and condicion_ret_long:
-        tipo_op = "LONG"
-        estado_senal = "🚀 SEÑAL ACTIVA: GATILLO LONG DETECTADO"
-    elif condicion_ema_short and condicion_ret_short:
-        tipo_op = "SHORT"
-        estado_senal = "📉 SEÑAL ACTIVA: GATILLO SHORT DETECTADO"
-    else:
-        tipo_op = "NEUTRAL"
-        estado_senal = "🛡️ SISTEMA EN ESPERA: SIN SEÑALES RELEVANTES"
-
     # --- VISTA PRINCIPAL DEL DASHBOARD ---
     st.title("💎 AI Crypto Strategist & Sentinel V10 Pro")
     st.caption(f"Último Cierre Diario Consolidado Evaluado (UTC): {df.index[-1].strftime('%Y-%m-%d')}")
-
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Precio de Cierre ($)", f"${precio_actual:,.2f}")
-    col2.metric("EMA 50 ($)", f"${ema50_actual:,.2f}", f"{(precio_actual-ema50_actual):+,.2f}")
-    col3.metric("Retorno 3D (%)", f"{ret3d_actual:+.2f}%", delta_color="inverse")
-    col4.metric("ATR (14)", f"${atr_actual:,.2f}")
 
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "🎯 Dictamen y Ejecución",
@@ -147,57 +123,56 @@ else:
         "📖 Manual Operativo"
     ])
 
-    # --- PESTAÑA 1: DICTAMEN DE OPERACIONES ---
+    # --- PESTAÑA 1: GRÁFICO PRO E INTERFAZ DE ALERTAS ---
     with tab1:
-        st.header("🔍 Monitor del Dictaminador Cuantitativo")
-
-        # Insertar gráfico de velas interactivo con Plotly
-        fig_chart = go.Figure()
-        fig_chart.add_trace(go.Candlestick(
-            x=df.index,
-            open=df['Open'],
-            high=df['High'],
-            low=df['Low'],
-            close=df['Close'],
-            name="Velas Japonesas"
-        ))
-        fig_chart.add_trace(go.Scatter(
-            x=df.index,
-            y=df['ema_50'],
-            line=dict(color='#3B82F6', width=2),
-            name="EMA 50"
-        ))
-        fig_chart.update_layout(
-            template="plotly_dark",
-            title=f"Acción de Precio de {crypto} e Indicadores Técnicos",
-            xaxis_rangeslider_visible=False,
-            yaxis_title="Precio (USD)",
-            xaxis_title="Fecha"
-        )
-        st.plotly_chart(fig_chart, use_container_width=True)
-
-        if tipo_op != "NEUTRAL":
-            st.warning(f"Se ha detectado una anomalía o desviación matemática óptima para colocar una orden:")
-
-            # Gestión de Riesgo Institucional
-            capital_arriesgar = capital_total * (riesgo_deseado / 100.0)
-            # Tamaño de posición ajustado por volatilidad (ATR)
-            pos_size = (capital_arriesgar / (atr_actual / precio_actual))
-            unidades_moneda_base = pos_size / precio_actual
-
-            st.write(f"### Ficha de Orden Recomendada ({tipo_op})")
-            c_o1, c_o2, c_o3 = st.columns(3)
-            c_o1.metric("Capital Arriesgado Fijo", f"${capital_arriesgar:,.2f} USD")
-            c_o2.metric("Tamaño de Posición sugerido", f"${pos_size:,.2f} USD")
-            c_o3.metric("Unidades Base", f"{unidades_moneda_base:.5f} {crypto.split('-')[0]}")
-
-            st.write("--- ")
-            st.subheader("✈️ Canal de Comunicaciones Descentralizadas")
+        df['chart_signal'] = 0
+        df.loc[(df['Close'] > df['ema_50']) & (df['retorno_3d'] <= -3.0), 'chart_signal'] = 1
+        df.loc[(df['Close'] < df['ema_50']) & (df['retorno_3d'] >= 3.0), 'chart_signal'] = -1
+        longs = df[df['chart_signal'] == 1]
+        shorts = df[df['chart_signal'] == -1]
+        
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name="Precio Real", line=dict(color='#F8FAFC', width=2)))
+        fig.add_trace(go.Scatter(x=df.index, y=df['ema_50'], name="EMA 50", line=dict(color='#3B82F6', width=1.5)))
+        fig.add_trace(go.Scatter(x=longs.index, y=longs['Close'] * 0.96, mode='markers', name="Gatillo Long 🚀", marker=dict(symbol='triangle-up', size=11, color='#10B981')))
+        fig.add_trace(go.Scatter(x=shorts.index, y=shorts['Close'] * 1.04, mode='markers', name="Gatillo Short 📉", marker=dict(symbol='triangle-down', size=11, color='#EF4444')))
+        fig.update_layout(template="plotly_dark", height=450, margin=dict(l=10, r=10, t=20, b=10), hovermode="x unified")
+        st.plotly_chart(fig, use_container_width=True)
+        
+        st.subheader("📋 Estado Actual del Dictaminador Sentinel")
+        estado_senal = "😴 ESPERANDO SETUP CLARO (El precio cotiza en zona de ruido neutral)"
+        tipo_op = None
+        
+        if precio_actual > ema50_actual and ret3d_actual <= -3.0:
+            estado_senal = "🚀 SEÑAL ACTIVA: GATILLO LONG DETECTADO"
+            tipo_op = "LONG"
+        elif precio_actual < ema50_actual and ret3d_actual >= 3.0:
+            estado_senal = "📉 SEÑAL ACTIVA: GATILLO SHORT DETECTADO"
+            tipo_op = "SHORT"
+            
+        c_p1, c_p2, c_p3 = st.columns(3)
+        c_p1.metric("Precio de Cierre Evaluado (Ayer)", f"${precio_actual:,.2f}")
+        c_p2.metric("Retorno Acumulado 3D", f"{ret3d_actual:.2f}%")
+        c_p3.metric("ATR Volatilidad Diaria", f"${atr_actual:,.2f}")
+        
+        capital_arriesgar = capital_total * (riesgo_deseado / 100)
+        pos_size = (capital_arriesgar / (atr_actual / precio_actual)) if atr_actual > 0 else 0.0
+        pos_size = min(pos_size, capital_total * 2.0)
+        
+        st.write("### 📐 Ficha Estricta de Orden Recomendada")
+        col_o1, col_o2, col_o3 = st.columns(3)
+        col_o1.metric("Límite de Pérdida Monetario (0.5%)", f"${capital_arriesgar:,.2f} USD")
+        col_o2.metric("Exposición Nominal Máxima (USD)", f"${pos_size:,.2f} USD")
+        col_o3.metric("Tamaño Sugerido en Moneda Base", f"{pos_size / precio_actual:.5f} unidades")
+        
+        if tipo_op in ["LONG", "SHORT"]:
+            st.markdown("---")
+            st.write("🔒 **Módulo de Despacho Administrativo (QuantumTradeA)**")
             admin_password = st.text_input("Introduce la clave maestra para autorizar el envío:", type="password", key="admin_pwd_field")
-
+            
             if tipo_op == "LONG":
                 st.success(estado_senal)
-                msg_alert = f"🚨 *NUEVA SEÑAL SENTINEL V10 PRO*\n\n• Activo: {crypto}\n• Tipo: LONG 🚀\n• Precio Entrada: ${precio_actual:,.2f} USD\n⏱️ Salida Rígía: 24h"
+                msg_alert = f"🚨 *NUEVA SEÑAL SENTINEL V10 PRO*\n\n• Activo: {crypto}\n• Tipo: LONG 🚀\n• Precio Entrada: ${precio_actual:,.2f} USD\n• Salida Rígida: 24h"
                 if st.button("✈️ Despachar Alerta LONG a Telegram", key="btn_long"):
                     if admin_password == CLAVE_MAESTRA:
                         despachar_alerta_telegram(msg_alert)
@@ -206,7 +181,7 @@ else:
                         st.error("❌ Credenciales inválidas.")
             elif tipo_op == "SHORT":
                 st.error(estado_senal)
-                msg_alert = f"🚨 *NUEVA SEÑAL SENTINEL V10 PRO*\n\n• Activo: {crypto}\n• Tipo: SHORT 📉\n• Precio Entrada: ${precio_actual:,.2f} USD\n⏱️ Salida Rígida: 24h"
+                msg_alert = f"🚨 *NUEVA SEÑAL SENTINEL V10 PRO*\n\n• Activo: {crypto}\n• Tipo: SHORT 📉\n• Precio Entrada: ${precio_actual:,.2f} USD\n• Salida Rígida: 24h"
                 if st.button("✈️ Despachar Alerta SHORT a Telegram", key="btn_short"):
                     if admin_password == CLAVE_MAESTRA:
                         despachar_alerta_telegram(msg_alert)
