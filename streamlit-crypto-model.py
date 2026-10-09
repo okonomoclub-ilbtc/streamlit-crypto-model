@@ -56,31 +56,26 @@ def load_data_v10(ticker, days=1500):
     if df.empty:
         return df
 
-    # Convertir índice a DatetimeIndex si no lo es, y asegurar que no tenga tz o esté alineado
     df.index = pd.to_datetime(df.index)
 
-    # Si las columnas son MultiIndex (frecuente en descargas de yfinance recientes), las aplanamos
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.droplevel(1)
 
-    # Definir fecha actual en UTC de manera rígida
     ahora_utc = datetime.now(timezone.utc).date()
 
-    # Eliminar la última fila si corresponde al día de hoy en UTC (vela no cerrada)
     if df.index[-1].date() >= ahora_utc:
         df = df.iloc[:-1]
 
-    # Mantener el límite de historial requerido
     df = df.tail(days)
     return df
 
-# --- INTERFAZ DE USUARIO (SIDEBAR) ---
+# --- INTERFAZ DE USUARIO (SIDEBAR) ORDENADA --- 
 st.sidebar.title("⚙️ Parámetros Sentinel V10")
 crypto = st.sidebar.selectbox("Activo de Análisis", ["BTC-USD", "ETH-USD", "SOL-USD"], index=0)
 history_days = st.sidebar.slider("Historial de Análisis (Días)", 500, 2000, 1500, step=100)
+epochs_n = st.sidebar.slider("Épocas de Entrenamiento LSTM", 5, 50, 15, step=5)
 capital_total = st.sidebar.number_input("Capital Total Operativo ($)", min_value=100.0, value=100000.0, step=1000.0)
 riesgo_deseado = st.sidebar.slider("Porcentaje de Riesgo Máximo (%)", 0.1, 5.0, 0.5, step=0.1)
-epochs_n = st.sidebar.slider("Épocas de Entrenamiento LSTM", 5, 50, 15, step=5)
 
 # --- CARGA DE DATOS ---
 df = load_data_v10(crypto, days=history_days)
@@ -92,7 +87,6 @@ else:
     df['ema_50'] = df['Close'].ewm(span=50, adjust=False).mean()
     df['retorno_3d'] = df['Close'].pct_change(periods=3) * 100
 
-    # ATR de 14 períodos
     high_low = df['High'] - df['Low']
     high_close = (df['High'] - df['Close'].shift()).abs()
     low_close = (df['Low'] - df['Close'].shift()).abs()
@@ -105,7 +99,6 @@ else:
     # --- EVALUACIÓN DE SEÑALES ---
     now = df.iloc[-1]
 
-    # Extracción segura de valores escapando de posibles remanentes de series
     precio_actual = float(now['Close'].iloc[0]) if isinstance(now['Close'], pd.Series) else float(now['Close'])
     ema50_actual = float(now['ema_50'].iloc[0]) if isinstance(now['ema_50'], pd.Series) else float(now['ema_50'])
     ret3d_actual = float(now['retorno_3d'].iloc[0]) if isinstance(now['retorno_3d'], pd.Series) else float(now['retorno_3d'])
@@ -130,7 +123,7 @@ else:
         df.loc[(df['Close'] < df['ema_50']) & (df['retorno_3d'] >= 3.0), 'chart_signal'] = -1
         longs = df[df['chart_signal'] == 1]
         shorts = df[df['chart_signal'] == -1]
-        
+
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name="Precio Real", line=dict(color='#F8FAFC', width=2)))
         fig.add_trace(go.Scatter(x=df.index, y=df['ema_50'], name="EMA 50", line=dict(color='#3B82F6', width=1.5)))
@@ -138,38 +131,47 @@ else:
         fig.add_trace(go.Scatter(x=shorts.index, y=shorts['Close'] * 1.04, mode='markers', name="Gatillo Short 📉", marker=dict(symbol='triangle-down', size=11, color='#EF4444')))
         fig.update_layout(template="plotly_dark", height=450, margin=dict(l=10, r=10, t=20, b=10), hovermode="x unified")
         st.plotly_chart(fig, use_container_width=True)
-        
+
         st.subheader("📋 Estado Actual del Dictaminador Sentinel")
+
+        # Confirmación de la posición del precio respecto a la EMA 50 solicitada por el usuario
+        if precio_actual > ema50_actual:
+            posicion_ema_info = f"📈 FILTRO DE TENDENCIA AUTORIZADO: El precio (${precio_actual:,.2f}) cotiza POR ENCIMA de la EMA 50 (${ema50_actual:,.2f}). Filtro alcista validado."
+            st.success(posicion_ema_info)
+        else:
+            posicion_ema_info = f"📉 FILTRO DE TENDENCIA AUTORIZADO: El precio (${precio_actual:,.2f}) cotiza POR DEBAJO de la EMA 50 (${ema50_actual:,.2f}). Filtro bajista validado."
+            st.error(posicion_ema_info)
+
         estado_senal = "😴 ESPERANDO SETUP CLARO (El precio cotiza en zona de ruido neutral)"
         tipo_op = None
-        
+
         if precio_actual > ema50_actual and ret3d_actual <= -3.0:
             estado_senal = "🚀 SEÑAL ACTIVA: GATILLO LONG DETECTADO"
             tipo_op = "LONG"
         elif precio_actual < ema50_actual and ret3d_actual >= 3.0:
             estado_senal = "📉 SEÑAL ACTIVA: GATILLO SHORT DETECTADO"
             tipo_op = "SHORT"
-            
+
         c_p1, c_p2, c_p3 = st.columns(3)
         c_p1.metric("Precio de Cierre Evaluado (Ayer)", f"${precio_actual:,.2f}")
         c_p2.metric("Retorno Acumulado 3D", f"{ret3d_actual:.2f}%")
         c_p3.metric("ATR Volatilidad Diaria", f"${atr_actual:,.2f}")
-        
+
         capital_arriesgar = capital_total * (riesgo_deseado / 100)
         pos_size = (capital_arriesgar / (atr_actual / precio_actual)) if atr_actual > 0 else 0.0
         pos_size = min(pos_size, capital_total * 2.0)
-        
+
         st.write("### 📐 Ficha Estricta de Orden Recomendada")
         col_o1, col_o2, col_o3 = st.columns(3)
         col_o1.metric("Límite de Pérdida Monetario (0.5%)", f"${capital_arriesgar:,.2f} USD")
         col_o2.metric("Exposición Nominal Máxima (USD)", f"${pos_size:,.2f} USD")
         col_o3.metric("Tamaño Sugerido en Moneda Base", f"{pos_size / precio_actual:.5f} unidades")
-        
+
         if tipo_op in ["LONG", "SHORT"]:
             st.markdown("---")
             st.write("🔒 **Módulo de Despacho Administrativo (QuantumTradeA)**")
             admin_password = st.text_input("Introduce la clave maestra para autorizar el envío:", type="password", key="admin_pwd_field")
-            
+
             if tipo_op == "LONG":
                 st.success(estado_senal)
                 msg_alert = f"🚨 *NUEVA SEÑAL SENTINEL V10 PRO*\n\n• Activo: {crypto}\n• Tipo: LONG 🚀\n• Precio Entrada: ${precio_actual:,.2f} USD\n• Salida Rígida: 24h"
@@ -246,24 +248,31 @@ else:
         }
         st.table(pd.DataFrame(tabla_data))
 
-    # --- PESTAÑA 4: NOTICIAS BINANCE FEED ---
+    # --- PESTAÑA 4: NOTICIAS RECTORAS (COINDESK) ---
     with tab4:
         st.subheader(f"📰 Despachos del Mercado y Fundamentales: {crypto}")
-        ticker_rss = crypto.replace("-", "").lower()
-        rss_url = "binance.com"
+        rss_url = "https://www.coindesk.com/arc/outboundfeeds/rss/"
         feed = feedparser.parse(rss_url)
+        ticker_base = crypto.split('-')[0].lower()
         if feed.entries and len(feed.entries) > 0:
             noticias_despachadas = 0
             for entry in feed.entries:
-                if ticker_rss in entry.title.lower() or noticias_despachadas < 2:
+                titulo_has_kw = ticker_base in entry.title.lower() or "crypto" in entry.title.lower() or "bitcoin" in entry.title.lower()
+                if titulo_has_kw:
                     with st.expander(f"🔸 {entry.title}"):
-                        st.write(getattr(entry, 'summary', 'Despacho oficial disponible en Binance Feed.'))
-                        st.link_button("Leer Noticia Completa en Binance", entry.link, key=f"ln_binance_{noticias_despachadas}")
+                        st.write(getattr(entry, 'summary', 'Despacho oficial de CoinDesk disponible en el enlace inferior.'))
+                        st.link_button("Leer Noticia Completa en CoinDesk", entry.link, key=f"ln_coindesk_{noticias_despachadas}")
                         noticias_despachadas += 1
                 if noticias_despachadas >= 5:
                     break
+            if noticias_despachadas == 0:
+                # Si no hay filtros directos, mostramos las últimas noticias generales del feed para evitar vacío
+                for i, entry in enumerate(feed.entries[:4]):
+                    with st.expander(f"🔸 {entry.title}"):
+                        st.write(getattr(entry, 'summary', 'Noticia destacada del ecosistema blockchain.'))
+                        st.link_button("Leer en CoinDesk", entry.link, key=f"ln_fallback_{i}")
         else:
-            st.info(" Sincronizando búfer alternativo de Binance Square...")
+            st.info(" Sincronizando búfer alternativo de noticias de CoinDesk...")
 
     # --- PESTAÑA 5: MANUAL COMPLETO INTERACTIVO ---
     with tab5:
