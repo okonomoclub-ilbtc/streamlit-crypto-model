@@ -59,6 +59,10 @@ def load_data_v10(ticker, days=1500):
     # Convertir índice a DatetimeIndex si no lo es, y asegurar que no tenga tz o esté alineado
     df.index = pd.to_datetime(df.index)
 
+    # Si las columnas son MultiIndex (frecuente en descargas de yfinance recientes), las aplanamos
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.droplevel(1)
+
     # Definir fecha actual en UTC de manera rígida
     ahora_utc = datetime.now(timezone.utc).date()
 
@@ -100,10 +104,12 @@ else:
 
     # --- EVALUACIÓN DE SEÑALES ---
     now = df.iloc[-1]
-    precio_actual = float(now['Close'])
-    ema50_actual = float(now['ema_50'])
-    ret3d_actual = float(now['retorno_3d'])
-    atr_actual = float(now['atr'])
+    
+    # Extracción segura de valores escapando de posibles remanentes de series
+    precio_actual = float(now['Close'].iloc[0]) if isinstance(now['Close'], pd.Series) else float(now['Close'])
+    ema50_actual = float(now['ema_50'].iloc[0]) if isinstance(now['ema_50'], pd.Series) else float(now['ema_50'])
+    ret3d_actual = float(now['retorno_3d'].iloc[0]) if isinstance(now['retorno_3d'], pd.Series) else float(now['retorno_3d'])
+    atr_actual = float(now['atr'].iloc[0]) if isinstance(now['atr'], pd.Series) else float(now['atr'])
 
     # Reglas Binarias de la Sentinel V10 Pro
     condicion_ema_long = precio_actual > ema50_actual
@@ -166,7 +172,7 @@ else:
 
             if tipo_op == "LONG":
                 st.success(estado_senal)
-                msg_alert = f"🚨 *NUEVA SEÑAL SENTINEL V10 PRO*\n\n• Activo: {crypto}\n• Tipo: LONG 🚀\n• Precio Entrada: ${precio_actual:,.2f} USD\n⏱️ Salida Rígida: 24h"
+                msg_alert = f"🚨 *NUEVA SEÑAL SENTINEL V10 PRO*\n\n• Activo: {crypto}\n• Tipo: LONG 🚀\n• Precio Entrada: ${precio_actual:,.2f} USD\n⏱️ Salida Rígía: 24h"
                 if st.button("✈️ Despachar Alerta LONG a Telegram", key="btn_long"):
                     if admin_password == CLAVE_MAESTRA:
                         despachar_alerta_telegram(msg_alert)
