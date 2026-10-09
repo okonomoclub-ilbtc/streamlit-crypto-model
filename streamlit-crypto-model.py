@@ -104,7 +104,7 @@ else:
 
     # --- EVALUACIÓN DE SEÑALES ---
     now = df.iloc[-1]
-    
+
     # Extracción segura de valores escapando de posibles remanentes de series
     precio_actual = float(now['Close'].iloc[0]) if isinstance(now['Close'], pd.Series) else float(now['Close'])
     ema50_actual = float(now['ema_50'].iloc[0]) if isinstance(now['ema_50'], pd.Series) else float(now['ema_50'])
@@ -150,6 +150,31 @@ else:
     # --- PESTAÑA 1: DICTAMEN DE OPERACIONES ---
     with tab1:
         st.header("🔍 Monitor del Dictaminador Cuantitativo")
+
+        # Insertar gráfico de velas interactivo con Plotly
+        fig_chart = go.Figure()
+        fig_chart.add_trace(go.Candlestick(
+            x=df.index,
+            open=df['Open'],
+            high=df['High'],
+            low=df['Low'],
+            close=df['Close'],
+            name="Velas Japonesas"
+        ))
+        fig_chart.add_trace(go.Scatter(
+            x=df.index,
+            y=df['ema_50'],
+            line=dict(color='#3B82F6', width=2),
+            name="EMA 50"
+        ))
+        fig_chart.update_layout(
+            template="plotly_dark",
+            title=f"Acción de Precio de {crypto} e Indicadores Técnicos",
+            xaxis_rangeslider_visible=False,
+            yaxis_title="Precio (USD)",
+            xaxis_title="Fecha"
+        )
+        st.plotly_chart(fig_chart, use_container_width=True)
 
         if tipo_op != "NEUTRAL":
             st.warning(f"Se ha detectado una anomalía o desviación matemática óptima para colocar una orden:")
