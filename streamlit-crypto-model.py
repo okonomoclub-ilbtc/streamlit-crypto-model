@@ -6,19 +6,20 @@ import yfinance as yf
 import feedparser
 import math
 import requests
+from datetime import datetime, timezone
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 import tensorflow as tf
 
-# --- FIJACIÓN DE SEMILLA DE REPRODUCIBILIDAD (MEJORA GITHUB) ---
+# --- SEMILLA DE REPRODUCIBILIDAD ---
 np.random.seed(7)
 tf.random.set_seed(7)
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="AI Crypto Strategist & Sentinel V10 Pro", layout="wide")
 
-# --- CONFIGURACIÓN DE CREDENCIALES OCULTAS (SEGURIDAD DE PRODUCCIÓN CON FALLBACK) ---
+# --- CONFIGURACIÓN DE CREDENCIALES ---
 try:
     TOKEN_TELEGRAM = st.secrets.get("TELEGRAM_TOKEN", "DUMMY_TOKEN")
     CLAVE_MAESTRA = st.secrets.get("MAINTENANCE_PASSWORD", "PRO_PASS_2026")
@@ -29,134 +30,138 @@ except Exception:
 CHAT_ID = "@quantumtradear"
 
 def despachar_alerta_telegram(mensaje):
-    """Envía notificaciones de rupturas matemáticas al canal de QuantumTradeA."""
+    """Envía notificaciones de rupturas matemáticas al canal de Telegram."""
     if TOKEN_TELEGRAM == "DUMMY_TOKEN":
         st.warning("⚠️ Telegram no configurado. Token ficticio detectado.")
         return
-    url = f"https://telegram.org{TOKEN_TELEGRAM}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": mensaje, "parse_mode": "Markdown"}
+    url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
+    payload = {
+        "chat_id": CHAT_ID,
+        "text": mensaje,
+        "parse_mode": "Markdown"
+    }
     try:
-        requests.post(url, json=payload, timeout=5)
-    except Exception:
-        pass
+        res = requests.post(url, json=payload)
+        if res.status_code == 200:
+            st.success("🚀 Alerta despachada exitosamente a Telegram.")
+        else:
+            st.error(f"❌ Error de despacho en API de Telegram: {res.text}")
+    except Exception as e:
+        st.error(f"❌ Error de conexión: {str(e)}")
 
-# --- FUNCIONES DE TRADING CUANTITATIVO (SENTINEL V10 PRO CORREGIDA) ---
-@st.cache_data(ttl=3600)
-def load_data_v10(ticker, days):
-    try:
-        # CORRECCIÓN DE DESFASE: Normalizamos la fecha a la medianoche pura para evitar distorsión horaria
-        fecha_inicio = (pd.Timestamp.now() - pd.Timedelta(days=days)).normalize()
-        df = yf.download(ticker, start=fecha_inicio, progress=False, auto_adjust=True)
+@st.cache_data(ttl=300) # Caché de 5 minutos
+def load_data_v10(ticker, days=1500):
+    """Descarga datos y elimina de forma estricta la vela diaria incompleta en curso (UTC)."""
+    df = yf.download(ticker, period="max")
+    if df.empty:
+        return df
 
-        if df.empty:
-            return pd.DataFrame()
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
+    # Convertir índice a DatetimeIndex si no lo es, y asegurar que no tenga tz o esté alineado
+    df.index = pd.to_datetime(df.index)
 
-        # Filtro de Tendencia Intermedio (EMA 50)
-        df['ema_50'] = df['Close'].ewm(span=50, adjust=False).mean()
+    # Definir fecha actual en UTC de manera rígida
+    ahora_utc = datetime.now(timezone.utc).date()
 
-        # Cálculo preciso del Retorno de 3 velas cerradas consecutivas
-        df['retorno_3d'] = df['Close'].pct_change(periods=3) * 100
+    # Eliminar la última fila si corresponde al día de hoy en UTC (vela no cerrada)
+    if df.index[-1].date() >= ahora_utc:
+        df = df.iloc[:-1]
 
-        # True Range y ATR de 14
-        high_low = df['High'] - df['Low']
-        high_cp = np.abs(df['High'] - df['Close'].shift(1))
-        low_cp = np.abs(df['Low'] - df['Close'].shift(1))
-        tr = pd.concat([high_low, high_cp, low_cp], axis=1).max(axis=1)
-        df['atr'] = tr.rolling(14).mean()
+    # Mantener el límite de historial requerido
+    df = df.tail(days)
+    return df
 
-        # Eliminamos la última fila si el día de hoy no ha cerrado oficialmente en velas diarias de Yahoo Finance
-        if df.index[-1].date() == pd.Timestamp.now().date():
-            df = df.iloc[:-1]
+# --- INTERFAZ DE USUARIO (SIDEBAR) ---
+st.sidebar.title("⚙️ Parámetros Sentinel V10")
+crypto = st.sidebar.selectbox("Activo de Análisis", ["BTC-USD", "ETH-USD", "SOL-USD"], index=0)
+history_days = st.sidebar.slider("Historial de Análisis (Días)", 500, 2000, 1500, step=100)
+capital_total = st.sidebar.number_input("Capital Total Operativo ($)", min_value=100.0, value=100000.0, step=1000.0)
+riesgo_deseado = st.sidebar.slider("Porcentaje de Riesgo Máximo (%)", 0.1, 5.0, 0.5, step=0.1)
+epochs_n = st.sidebar.slider("Épocas de Entrenamiento LSTM", 5, 50, 15, step=5)
 
-        return df.dropna()
-    except Exception:
-        return pd.DataFrame()
+# --- CARGA DE DATOS ---
+df = load_data_v10(crypto, days=history_days)
 
-# --- INTERFAZ LATERAL (SIDEBAR) ---
-with st.sidebar:
-    st.header("⚙️ Panel de Control")
-    crypto = st.selectbox("Activo a Auditar", ["BTC-USD", "ETH-USD", "SOL-USD"])
-    history_days = st.slider("Ventana Histórica (Días)", 500, 3000, 1500)
-    epochs_n = st.slider("Épocas Entrenamiento LSTM", 5, 50, 15)
-    st.markdown("---")
-    st.write("💰 **Gestión de Riesgo de Portafolio**")
-    capital_total = st.number_input("Capital Operativo Base ($)", min_value=10.0, value=100000.0, step=1000.0)
-    riesgo_deseado = st.slider("Riesgo por Operación (%)", 0.1, 2.0, 0.5, step=0.1)
-    st.markdown("---")
-    st.write("📢 **Canales Oficiales:**")
-    st.markdown("[✈️ Telegram QuantumTradeA](https://t.me)")
-    st.markdown("[𝕏 Twitter @bookbinderr](https://x.com)")
-
-df = load_data_v10(crypto, history_days)
-
-# --- CUERPO PRINCIPAL ---
-st.title(f"🚀 AI Crypto Strategist & Dictaminador Sentinel V10 Pro")
-
-if df.empty or len(df) < 100:
-    st.error(f"❌ Muestra estadística insuficiente para simular {crypto}.")
+if df.empty:
+    st.error("No se pudieron descargar datos para el activo seleccionado.")
 else:
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📊 Gráfico e Interfaz Operativa",
-        "🤖 Predicción Neuronal LSTM",
-        "🎯 Registro de Robustez (Backtest)",
-        "📰 Noticias en Tiempo Real",
-        "📖 Manual Operativo Sistemático"
-    ])
+    # --- CÁLCULO DE INDICADORES MATEMÁTICOS ---
+    df['ema_50'] = df['Close'].ewm(span=50, adjust=False).mean()
+    df['retorno_3d'] = df['Close'].pct_change(periods=3) * 100
 
-    # Sincronización milimétrica: Evaluamos la última vela cerrada consolidada de la matriz purgada
+    # ATR de 14 períodos
+    high_low = df['High'] - df['Low']
+    high_close = (df['High'] - df['Close'].shift()).abs()
+    low_close = (df['Low'] - df['Close'].shift()).abs()
+    ranges = pd.concat([high_low, high_close, low_close], axis=1)
+    true_range = ranges.max(axis=1)
+    df['atr'] = true_range.ewm(span=14, adjust=False).mean()
+
+    df.dropna(inplace=True)
+
+    # --- EVALUACIÓN DE SEÑALES ---
     now = df.iloc[-1]
     precio_actual = float(now['Close'])
-    ret3d_actual = float(now['retorno_3d'])
     ema50_actual = float(now['ema_50'])
+    ret3d_actual = float(now['retorno_3d'])
     atr_actual = float(now['atr'])
 
-    # --- PESTAÑA 1: GRÁFICO PRO E INTERFAZ DE ALERTAS ---
+    # Reglas Binarias de la Sentinel V10 Pro
+    condicion_ema_long = precio_actual > ema50_actual
+    condicion_ret_long = ret3d_actual <= -3.0  # Caída extrema
+
+    condicion_ema_short = precio_actual < ema50_actual
+    condicion_ret_short = ret3d_actual >= 3.0  # Alza extrema
+
+    # Identificar el estado operativo
+    if condicion_ema_long and condicion_ret_long:
+        tipo_op = "LONG"
+        estado_senal = "🚀 SEÑAL ACTIVA: GATILLO LONG DETECTADO"
+    elif condicion_ema_short and condicion_ret_short:
+        tipo_op = "SHORT"
+        estado_senal = "📉 SEÑAL ACTIVA: GATILLO SHORT DETECTADO"
+    else:
+        tipo_op = "NEUTRAL"
+        estado_senal = "🛡️ SISTEMA EN ESPERA: SIN SEÑALES RELEVANTES"
+
+    # --- VISTA PRINCIPAL DEL DASHBOARD ---
+    st.title("💎 AI Crypto Strategist & Sentinel V10 Pro")
+    st.caption(f"Último Cierre Diario Consolidado Evaluado (UTC): {df.index[-1].strftime('%Y-%m-%d')}")
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Precio de Cierre ($)", f"${precio_actual:,.2f}")
+    col2.metric("EMA 50 ($)", f"${ema50_actual:,.2f}", f"{(precio_actual-ema50_actual):+,.2f}")
+    col3.metric("Retorno 3D (%)", f"{ret3d_actual:+.2f}%", delta_color="inverse")
+    col4.metric("ATR (14)", f"${atr_actual:,.2f}")
+
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "🎯 Dictamen y Ejecución",
+        "🤖 Modelo Predictivo LSTM",
+        "📈 Backtest Histórico",
+        "📰 Noticias Binance",
+        "📖 Manual Operativo"
+    ])
+
+    # --- PESTAÑA 1: DICTAMEN DE OPERACIONES ---
     with tab1:
-        df['chart_signal'] = 0
-        df.loc[(df['Close'] > df['ema_50']) & (df['retorno_3d'] <= -3.0), 'chart_signal'] = 1
-        df.loc[(df['Close'] < df['ema_50']) & (df['retorno_3d'] >= 3.0), 'chart_signal'] = -1
-        longs = df[df['chart_signal'] == 1]
-        shorts = df[df['chart_signal'] == -1]
+        st.header("🔍 Monitor del Dictaminador Cuantitativo")
 
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name="Precio Real", line=dict(color='#F8FAFC', width=2)))
-        fig.add_trace(go.Scatter(x=df.index, y=df['ema_50'], name="EMA 50", line=dict(color='#3B82F6', width=1.5)))
-        fig.add_trace(go.Scatter(x=longs.index, y=longs['Close'] * 0.96, mode='markers', name="Gatillo Long 🚀", marker=dict(symbol='triangle-up', size=11, color='#10B981')))
-        fig.add_trace(go.Scatter(x=shorts.index, y=shorts['Close'] * 1.04, mode='markers', name="Gatillo Short 📉", marker=dict(symbol='triangle-down', size=11, color='#EF4444')))
-        fig.update_layout(template="plotly_dark", height=450, margin=dict(l=10, r=10, t=20, b=10), hovermode="x unified")
-        st.plotly_chart(fig, use_container_width=True)
+        if tipo_op != "NEUTRAL":
+            st.warning(f"Se ha detectado una anomalía o desviación matemática óptima para colocar una orden:")
 
-        st.subheader("📋 Estado Actual del Dictaminador Sentinel")
-        estado_senal = "😴 ESPERANDO SETUP CLARO (El precio cotiza en zona de ruido neutral)"
-        tipo_op = None
+            # Gestión de Riesgo Institucional
+            capital_arriesgar = capital_total * (riesgo_deseado / 100.0)
+            # Tamaño de posición ajustado por volatilidad (ATR)
+            pos_size = (capital_arriesgar / (atr_actual / precio_actual))
+            unidades_moneda_base = pos_size / precio_actual
 
-        if precio_actual > ema50_actual and ret3d_actual <= -3.0:
-            estado_senal = "🚀 SEÑAL ACTIVA: GATILLO LONG DETECTADO"
-            tipo_op = "LONG"
-        elif precio_actual < ema50_actual and ret3d_actual >= 3.0:
-            estado_senal = "📉 SEÑAL ACTIVA: GATILLO SHORT DETECTADO"
-            tipo_op = "SHORT"
+            st.write(f"### Ficha de Orden Recomendada ({tipo_op})")
+            c_o1, c_o2, c_o3 = st.columns(3)
+            c_o1.metric("Capital Arriesgado Fijo", f"${capital_arriesgar:,.2f} USD")
+            c_o2.metric("Tamaño de Posición sugerido", f"${pos_size:,.2f} USD")
+            c_o3.metric("Unidades Base", f"{unidades_moneda_base:.5f} {crypto.split('-')[0]}")
 
-        c_p1, c_p2, c_p3 = st.columns(3)
-        c_p1.metric("Precio de Cierre Evaluado (Ayer)", f"${precio_actual:,.2f}")
-        c_p2.metric("Retorno Acumulado 3D", f"{ret3d_actual:.2f}%")
-        c_p3.metric("ATR Volatilidad Diaria", f"${atr_actual:,.2f}")
-
-        capital_arriesgar = capital_total * (riesgo_deseado / 100)
-        pos_size = (capital_arriesgar / (atr_actual / precio_actual)) if atr_actual > 0 else 0.0
-        pos_size = min(pos_size, capital_total * 2.0)
-
-        st.write("### 📐 Ficha Estricta de Orden Recomendada")
-        col_o1, col_o2, col_o3 = st.columns(3)
-        col_o1.metric("Límite de Pérdida Monetario (0.5%)", f"${capital_arriesgar:,.2f} USD")
-        col_o2.metric("Exposición Nominal Máxima (USD)", f"${pos_size:,.2f} USD")
-        col_o3.metric("Tamaño Sugerido en Moneda Base", f"{pos_size / precio_actual:.5f} unidades")
-
-        if tipo_op in ["LONG", "SHORT"]:
-            st.markdown("---")
-            st.write("🔒 **Módulo de Despacho Administrativo (QuantumTradeA)**")
+            st.write("--- ")
+            st.subheader("✈️ Canal de Comunicaciones Descentralizadas")
             admin_password = st.text_input("Introduce la clave maestra para autorizar el envío:", type="password", key="admin_pwd_field")
 
             if tipo_op == "LONG":
@@ -180,7 +185,7 @@ else:
         else:
             st.info(estado_senal)
 
-    # --- PESTAÑA 2: MODELO LSTM PROTEGIDO ---
+    # --- PESTAÑA 2: MODELO LSTM ---
     with tab2:
         st.subheader("🤖 Algoritmo de Redes Neuronales Recurrentes (LSTM)")
         if st.button("🔥 Iniciar Entrenamiento Predictivo LSTM", key="btn_ia_7d"):
@@ -207,7 +212,7 @@ else:
                 ])
                 model.compile(optimizer='adam', loss='mse')
                 model.fit(X, y, epochs=epochs_n, batch_size=32, verbose=0)
-                
+
                 future_preds = []
                 current_batch = scaled_all[-60:].reshape(1, 60, 1)
                 for _ in range(7):
@@ -215,7 +220,7 @@ else:
                     future_preds.append(p)
                     current_batch = np.append(current_batch[:, 1:, :], p.reshape(1, 1, 1), axis=1)
                 preds_7d = scaler.inverse_transform(np.array(future_preds).reshape(-1, 1))
-                
+
             f_dates = [df.index[-1] + pd.Timedelta(days=i) for i in range(1, 8)]
             fig_7d = go.Figure()
             fig_7d.add_trace(go.Scatter(x=f_dates, y=preds_7d.flatten(), mode='lines+markers', name="Proyección IA", line=dict(color='#EF4444', width=3)))
@@ -249,7 +254,7 @@ else:
                         st.write(getattr(entry, 'summary', 'Despacho oficial disponible en Binance Feed.'))
                         st.link_button("Leer Noticia Completa en Binance", entry.link, key=f"ln_binance_{noticias_despachadas}")
                         noticias_despachadas += 1
-                if noticias_despachadas >= 5: 
+                if noticias_despachadas >= 5:
                     break
         else:
             st.info(" Sincronizando búfer alternativo de Binance Square...")
@@ -312,7 +317,7 @@ else:
         else:
             st.success(f"✅ Gestión Segura: Nivel de apalancamiento real requerido de {apalancamiento_requerido:.1f}x. Posición totalmente protegida.")
 
-# --- PIE DE PÁGINA: CREDENCIALES Y EXPLICACIÓN DE RESPONSABILIDAD ---
+# --- PIE DE PÁGINA: CREDENCIALES ---
 st.markdown("---")
 st.markdown("🛡️ QuantumTradeA 2026 | Desarrollado con rigor por @Bookbinderr-2026", unsafe_allow_html=True)
 st.markdown("🚨 NOTA MARGINAL DE DESCARGO LEGAL: Esta aplicación web interactiva ha sido construida con fines estrictamente educativos, didácticos y de investigación estadística avanzada bajo la metodología de la ingeniería cuantitativa. Ninguno de los datos, alertas o fichas de órdenes recomendadas constituye una recomendación de inversión o asesoría financiera oficial. Los rendimientos pasados presentados en el registro de robustez no garantizan retornos futuros.", unsafe_allow_html=True)
