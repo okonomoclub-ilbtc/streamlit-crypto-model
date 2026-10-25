@@ -49,23 +49,24 @@ def despachar_alerta_telegram(mensaje):
     except Exception as e:
         st.error(f"❌ Error de conexión: {str(e)}")
 
-@st.cache_data(ttl=300) # Caché de 5 minutos
+@st.cache_data(ttl=300)  # Caché de 5 minutos
 def load_data_v10(ticker, days=1500):
-    """Descarga datos y elimina de forma estricta la vela diaria incompleta en curso (UTC)."""
+    """Descarga datos y maneja de forma inteligente la vela diaria en curso (UTC)."""
     df = yf.download(ticker, period="max")
     if df.empty:
         return df
-
+    
     df.index = pd.to_datetime(df.index)
-
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.droplevel(1)
-
-    ahora_utc = datetime.now(timezone.utc).date()
-
-    if df.index[-1].date() >= ahora_utc:
+        
+    ahora_utc = datetime.now(timezone.utc)
+    
+    # Si la última vela del DataFrame coincide con el día de hoy (aún incompleto en UTC), la removemos.
+    # Pero si es la de AYER o días anteriores, la dejamos intacta para procesar la señal de inmediato.
+    if df.index[-1].date() == ahora_utc.date():
         df = df.iloc[:-1]
-
+        
     df = df.tail(days)
     return df
 
@@ -116,23 +117,21 @@ else:
         "📖 Manual Operativo"
     ])
 
-    # --- PESTAÑA 1: GRÁFICO PRO E INTERFAZ DE ALERTAS ---
-    with tab1:
-        df['chart_signal'] = 0
-        df.loc[(df['Close'] > df['ema_50']) & (df['retorno_3d'] <= -3.0), 'chart_signal'] = 1
-        df.loc[(df['Close'] < df['ema_50']) & (df['retorno_3d'] >= 3.0), 'chart_signal'] = -1
-        longs = df[df['chart_signal'] == 1]
-        shorts = df[df['chart_signal'] == -1]
+    # --- PESTAÑA 1: GRÁFICO PRO E INTERFAZ DE ALERTAS ---   
+    c_p1, c_p2, c_p3 = st.columns(3)
+    c_p1.metric("🎯 Precio de Cierre Evaluado (Ayer)", f"${precio_actual:,.2f} USD")
+    c_p2.metric("⚡ Retorno Acumulado 3D", f"{ret3d_actual:+.2f}%")
+    c_p3.metric("📊 ATR Volatilidad Diaria", f"${atr_actual:,.2f} USD")
 
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name="Precio Real", line=dict(color='#F8FAFC', width=2)))
-        fig.add_trace(go.Scatter(x=df.index, y=df['ema_50'], name="EMA 50", line=dict(color='#3B82F6', width=1.5)))
-        fig.add_trace(go.Scatter(x=longs.index, y=longs['Close'] * 0.96, mode='markers', name="Gatillo Long 🚀", marker=dict(symbol='triangle-up', size=11, color='#10B981')))
-        fig.add_trace(go.Scatter(x=shorts.index, y=shorts['Close'] * 1.04, mode='markers', name="Gatillo Short 📉", marker=dict(symbol='triangle-down', size=11, color='#EF4444')))
-        fig.update_layout(template="plotly_dark", height=450, margin=dict(l=10, r=10, t=20, b=10), hovermode="x unified")
-        st.plotly_chart(fig, use_container_width=True)
+    capital_arriesgar = capital_total * (riesgo_deseado / 100)
+    pos_size = (capital_arriesgar / (atr_actual / precio_actual)) if atr_actual > 0 else 0.0
+    pos_size = min(pos_size, capital_total * 2.0)
 
-        st.subheader("📋 Estado Actual del Dictaminador Sentinel")
+    st.write("### 🗃️ Ficha Estricta de Orden Recomendada")
+    col_o1, col_o2, col_o3 = st.columns(3)
+    col_o1.metric("🛡️ Límite de Pérdida Monetario", f"${capital_arriesgar:,.2f} USD")
+    col_o2.metric("💰 Exposición Nominal Máxima", f"${pos_size:,.2f} USD")
+    col_o3.metric("📦 Tamaño Sugerido en Moneda Base", f"🪙 {pos_size / precio_actual:.5f} BTC")
 
         # Confirmación de la posición del precio respecto a la EMA 50 
         if precio_actual > ema50_actual:
