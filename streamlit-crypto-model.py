@@ -117,21 +117,58 @@ else:
         "📖 Manual Operativo"
     ])
 
-    # --- PESTAÑA 1: GRÁFICO PRO E INTERFAZ DE ALERTAS ---   
-    c_p1, c_p2, c_p3 = st.columns(3)
-    c_p1.metric("🎯 Precio de Cierre Evaluado (Ayer)", f"${precio_actual:,.2f} USD")
-    c_p2.metric("⚡ Retorno Acumulado 3D", f"{ret3d_actual:+.2f}%")
-    c_p3.metric("📊 ATR Volatilidad Diaria", f"${atr_actual:,.2f} USD")
-
-    capital_arriesgar = capital_total * (riesgo_deseado / 100)
-    pos_size = (capital_arriesgar / (atr_actual / precio_actual)) if atr_actual > 0 else 0.0
-    pos_size = min(pos_size, capital_total * 2.0)
-
-    st.write("### 🗃️ Ficha Estricta de Orden Recomendada")
-    col_o1, col_o2, col_o3 = st.columns(3)
-    col_o1.metric("🛡️ Límite de Pérdida Monetario", f"${capital_arriesgar:,.2f} USD")
-    col_o2.metric("💰 Exposición Nominal Máxima", f"${pos_size:,.2f} USD")
-    col_o3.metric("📦 Tamaño Sugerido en Moneda Base", f"🪙 {pos_size / precio_actual:.5f} BTC")
+    # --- PESTAÑA 1: GRÁFICO PRO E INTERFAZ DE ALERTAS
+    with tab1:
+        df['chart_signal'] = 0
+        df.loc[(df['Close'] > df['ema_50']) & (df['retorno_3d'] <= -3.0), 'chart_signal'] = 1
+        df.loc[(df['Close'] < df['ema_50']) & (df['retorno_3d'] >= 3.0), 'chart_signal'] = -1
+        
+        longs = df[df['chart_signal'] == 1]
+        shorts = df[df['chart_signal'] == -1]
+        
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name="Precio Real", line=dict(color='#F8FAFC', width=2)))
+        fig.add_trace(go.Scatter(x=df.index, y=df['ema_50'], name="EMA 50", line=dict(color='#3B82F6', width=1.5)))
+        fig.add_trace(go.Scatter(x=longs.index, y=longs['Close'] * 0.96, mode='markers', name="Gatillo Long", marker=dict(symbol='triangle-up', size=11, color='#10B981')))
+        fig.add_trace(go.Scatter(x=shorts.index, y=shorts['Close'] * 1.04, mode='markers', name="Gatillo Short", marker=dict(symbol='triangle-down', size=11, color='#EF4444')))
+        
+        fig.update_layout(template="plotly_dark", height=450, margin=dict(l=10, r=10, t=20, b=10), hovermode="x unified")
+        st.plotly_chart(fig, use_container_width=True)
+        
+        st.subheader("📊 Estado Actual del Dictaminador Sentinel")
+        
+        # Confirmación de la posición del precio respecto a la EMA 50
+        if precio_actual > ema50_actual:
+            st.markdown(f"**📈 FILTRO DE TENDENCIA AUTORIZADO**: El precio ({precio_actual:,.2f}) cotiza > EMA50 ({ema50_actual:,.2f}). [Filtro alcista validado]")
+        else:
+            st.markdown(f"**📉 FILTRO DE TENDENCIA AUTORIZADO**: El precio ({precio_actual:,.2f}) cotiza < EMA50 ({ema50_actual:,.2f}). [Filtro bajista validado]")
+            
+        st.write("") # Espacio estético
+        
+        estado_senal = "🔍 ESPERANDO SETUP CLARO (El precio cotiza en zona de ruido neutral)"
+        tipo_op = None
+        
+        if precio_actual > ema50_actual and ret3d_actual <= -3.0:
+            estado_senal = "🟢 SEÑAL ACTIVA: GATILLO LONG DETECTADO"
+            tipo_op = "LONG"
+        elif precio_actual < ema50_actual and ret3d_actual >= 3.0:
+            estado_senal = "🔴 SEÑAL ACTIVA: GATILLO SHORT DETECTADO"
+            tipo_op = "SHORT"
+            
+        c_p1, c_p2, c_p3 = st.columns(3)
+        c_p1.metric("🎯 Precio de Cierre Evaluado (Ayer)", f"${precio_actual:,.2f} USD")
+        c_p2.metric("⚡ Retorno Acumulado 3D", f"{ret3d_actual:+.2f}%")
+        c_p3.metric("📊 ATR Volatilidad Diaria", f"${atr_actual:,.2f} USD")
+        
+        capital_arriesgar = capital_total * (riesgo_deseado / 100)
+        pos_size = (capital_arriesgar / (atr_actual / precio_actual)) if atr_actual > 0 else 0.0
+        pos_size = min(pos_size, capital_total * 2.0)
+        
+        st.write("### 🗃️ Ficha Estricta de Orden Recomendada")
+        col_o1, col_o2, col_o3 = st.columns(3)
+        col_o1.metric("🛡️ Límite de Pérdida Monetario", f"${capital_arriesgar:,.2f} USD")
+        col_o2.metric("💰 Exposición Nominal Máxima", f"${pos_size:,.2f} USD")
+        col_o3.metric("📦 Tamaño Sugerido en Moneda Base", f"🪙 {pos_size / precio_actual:.5f} BTC")
 
         # Confirmación de la posición del precio respecto a la EMA 50 
         if precio_actual > ema50_actual:
