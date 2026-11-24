@@ -21,7 +21,7 @@ st.set_page_config(page_title="AI Crypto Strategist & Sentinel V10 Pro", layout=
 
 # --- CONFIGURACIÓN DE CREDENCIALES ---
 TOKEN_TELEGRAM = st.secrets.get("TELEGRAM_TOKEN", None)
-CHAT_ID = st.secrets.get("TELEGRAM_CHAT_ID", None)
+CHAT_ID = st.secrets.get("TELEGRAM_CHAT_ID", "@quantumtradear")
 CLAVE_MAESTRA = st.secrets.get("MAINTENANCE_PASSWORD", None)
 
 def despachar_alerta_telegram(mensaje):
@@ -178,7 +178,14 @@ else:
         col_o3.metric("Tamaño Sugerido en Moneda Base", f"{pos_size / precio_actual:.5f} unidades")
 
                 
-        # --- MÓDULO DE DESPACHO ADMINISTRATIVO BLINDADO ---
+                # --- ESTADO DE LA SEÑAL Y DESPACHO ADMINISTRATIVO ---
+        if tipo_op == "LONG":
+            st.success(estado_senal)
+        elif tipo_op == "SHORT":
+            st.error(estado_senal)
+        else:
+            st.info(estado_senal)
+
         if tipo_op in ["LONG", "SHORT"]:
             st.markdown("---")
             st.write("🔒 **Módulo de Despacho Administrativo (QuantumTradeA)**")
