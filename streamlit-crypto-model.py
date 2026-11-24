@@ -177,32 +177,7 @@ else:
         col_o2.metric("Exposición Nominal Máxima (USD)", f"${pos_size:,.2f} USD")
         col_o3.metric("Tamaño Sugerido en Moneda Base", f"{pos_size / precio_actual:.5f} unidades")
 
-        if tipo_op in ["LONG", "SHORT"]:
-            st.markdown("---")
-            st.write("🔒 **Módulo de Despacho Administrativo (QuantumTradeA)**")
-            admin_password = st.text_input("Introduce la clave maestra para autorizar el envío:", type="password", key="admin_pwd_field")
-
-            if tipo_op == "LONG":
-                st.success(estado_senal)
-                msg_alert = f"🚨 *NUEVA SEÑAL SENTINEL V10 PRO*\n\n• Activo: {crypto}\n• Tipo: LONG 🚀\n• Precio Entrada: ${precio_actual:,.2f} USD\n• Salida Rígida: 24h"
-                if st.button("✈️ Despachar Alerta LONG a Telegram", key="btn_long"):
-                    if admin_password == CLAVE_MAESTRA:
-                        despachar_alerta_telegram(msg_alert)
-                        st.toast("✅ ¡Autorizado! Señal LONG enviada a Telegram.")
-                    else:
-                        st.error("❌ Credenciales inválidas.")
-            elif tipo_op == "SHORT":
-                st.error(estado_senal)
-                msg_alert = f"🚨 *NUEVA SEÑAL SENTINEL V10 PRO*\n\n• Activo: {crypto}\n• Tipo: SHORT 📉\n• Precio Entrada: ${precio_actual:,.2f} USD\n• Salida Rígida: 24h"
-                if st.button("✈️ Despachar Alerta SHORT a Telegram", key="btn_short"):
-                    if admin_password == CLAVE_MAESTRA:
-                        despachar_alerta_telegram(msg_alert)
-                        st.toast("✅ ¡Autorizado! Señal SHORT enviada a Telegram.")
-                    else:
-                        st.error("❌ Credenciales inválidas.")
-        else:
-            st.info(estado_senal)
-            
+                
         # --- MÓDULO DE DESPACHO ADMINISTRATIVO BLINDADO ---
         if tipo_op in ["LONG", "SHORT"]:
             st.markdown("---")
