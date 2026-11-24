@@ -78,13 +78,12 @@ history_days = st.sidebar.slider("Historial de Análisis (Días)", 500, 2000, 15
 epochs_n = st.sidebar.slider("Épocas de Entrenamiento LSTM", 5, 50, 15, step=5)
 capital_total = st.sidebar.number_input("Capital Total Operativo ($)", min_value=100.0, value=100000.0, step=1000.0)
 riesgo_deseado = st.sidebar.slider("Porcentaje de Riesgo Máximo (%)", 0.1, 5.0, 0.5, step=0.1)
-
-    st.markdown("---")
-    st.write("📢 **Canales Oficiales QuantumTradeA:**")
-    link_tg = "https://" + "t.me/quantumtradear"
-    link_x = "https://" + "://x.com"
-    st.markdown(f"✈️ **[Telegram @quantumtradear]({link_tg})**")
-    st.markdown(f"𝕏 **[Twitter / X @bookbinderr]({link_x})**")
+st.sidebar.markdown("---")
+st.sidebar.write("📢 **Canales Oficiales QuantumTradeA:**")
+link_tg = "https://" + "t.me/quantumtradear"
+link_x = "https://" + "://x.com"
+st.sidebar.markdown(f"✈️ **[Telegram @quantumtradear]({link_tg})**")
+st.sidebar.markdown(f"𝕏 **[Twitter / X @bookbinderr]({link_x})**")
 
 # --- CARGA DE DATOS ---
 df = load_data_v10(crypto, days=history_days)
