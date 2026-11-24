@@ -20,34 +20,35 @@ tf.random.set_seed(7)
 st.set_page_config(page_title="AI Crypto Strategist & Sentinel V10 Pro", layout="wide")
 
 # --- CONFIGURACIÓN DE CREDENCIALES ---
-try:
-    TOKEN_TELEGRAM = st.secrets.get("TELEGRAM_TOKEN", "DUMMY_TOKEN")
-    CLAVE_MAESTRA = st.secrets.get("MAINTENANCE_PASSWORD", "PRO_PASS_2026")
-except Exception:
-    TOKEN_TELEGRAM = "DUMMY_TOKEN"
-    CLAVE_MAESTRA = "PRO_PASS_2026"
-
-CHAT_ID = "@quantumtradear"
+TOKEN_TELEGRAM = st.secrets.get("TELEGRAM_TOKEN", None)
+CHAT_ID = st.secrets.get("TELEGRAM_CHAT_ID", None)
+CLAVE_MAESTRA = st.secrets.get("MAINTENANCE_PASSWORD", None)
 
 def despachar_alerta_telegram(mensaje):
     """Envía notificaciones de rupturas matemáticas al canal de Telegram."""
-    if TOKEN_TELEGRAM == "DUMMY_TOKEN":
-        st.warning("⚠️ Telegram no configurado. Token ficticio detectado.")
-        return
-    url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
+    if not TOKEN_TELEGRAM or not CHAT_ID:
+        st.warning("⚠️ Credenciales de Telegram no detectadas en Streamlit Secrets.")
+        return False
+        
+    dominio_tg = "https://" + "api.telegram.org"
+    url = f"{dominio_tg}/bot{TOKEN_TELEGRAM}/sendMessage"
+    
     payload = {
         "chat_id": CHAT_ID,
         "text": mensaje,
         "parse_mode": "Markdown"
     }
     try:
-        res = requests.post(url, json=payload)
+        res = requests.post(url, json=payload, timeout=8)
         if res.status_code == 200:
-            st.success("🚀 Alerta despachada exitosamente a Telegram.")
+            st.success(f"🚀 Alerta despachada exitosamente a {CHAT_ID}.")
+            return True
         else:
             st.error(f"❌ Error de despacho en API de Telegram: {res.text}")
+            return False
     except Exception as e:
         st.error(f"❌ Error de conexión: {str(e)}")
+        return False
 
 @st.cache_data(ttl=300)  # Caché de 5 minutos
 def load_data_v10(ticker, days=1500):
@@ -77,6 +78,13 @@ history_days = st.sidebar.slider("Historial de Análisis (Días)", 500, 2000, 15
 epochs_n = st.sidebar.slider("Épocas de Entrenamiento LSTM", 5, 50, 15, step=5)
 capital_total = st.sidebar.number_input("Capital Total Operativo ($)", min_value=100.0, value=100000.0, step=1000.0)
 riesgo_deseado = st.sidebar.slider("Porcentaje de Riesgo Máximo (%)", 0.1, 5.0, 0.5, step=0.1)
+
+    st.markdown("---")
+    st.write("📢 **Canales Oficiales QuantumTradeA:**")
+    link_tg = "https://" + "t.me/quantumtradear"
+    link_x = "https://" + "://x.com"
+    st.markdown(f"✈️ **[Telegram @quantumtradear]({link_tg})**")
+    st.markdown(f"𝕏 **[Twitter / X @bookbinderr]({link_x})**")
 
 # --- CARGA DE DATOS ---
 df = load_data_v10(crypto, days=history_days)
@@ -195,6 +203,37 @@ else:
                         st.error("❌ Credenciales inválidas.")
         else:
             st.info(estado_senal)
+            
+        # --- MÓDULO DE DESPACHO ADMINISTRATIVO BLINDADO ---
+        if tipo_op in ["LONG", "SHORT"]:
+            st.markdown("---")
+            st.write("🔒 **Módulo de Despacho Administrativo (QuantumTradeA)**")
+            admin_password = st.text_input(
+                "Introduce la clave maestra para autorizar el envío al canal:",
+                type="password",
+                key="admin_pwd_field"
+            )
+
+            direccion_txt = "COMPRA (LONG) 🚀" if tipo_op == "LONG" else "VENTA (SHORT) 📉"
+            msg_alert = (
+                f"🚨 *NUEVA SEÑAL SENTINEL V10 PRO*\n\n"
+                f"• **Activo:** {crypto}\n"
+                f"• **Tipo:** {direccion_txt}\n"
+                f"• **Precio Entrada:** ${precio_actual:,.2f} USD\n"
+                f"• **Tamaño Sugerido:** {pos_size / precio_actual:.5f} unidades\n"
+                f"⏱️ **Salida Rígida:** 24 Horas Estrictas"
+            )
+
+            if st.button(f"✈️ Despachar Alerta {tipo_op} a Telegram", key="btn_dispatch_signal"):
+                if not CLAVE_MAESTRA:
+                    st.error("⚠️ La variable MAINTENANCE_PASSWORD no está configurada en Streamlit Secrets.")
+                elif admin_password == CLAVE_MAESTRA:
+                    if despachar_alerta_telegram(msg_alert):
+                        st.toast(f"✅ ¡Autorizado! Señal {tipo_op} enviada a {CHAT_ID}.")
+                elif admin_password == "":
+                    st.error("❌ Por favor, introduce la clave maestra para autorizar el envío.")
+                else:
+                    st.error("❌ Clave incorrecta. Intento de despacho bloqueado por seguridad.")
 
     # --- PESTAÑA 2: MODELO LSTM ---
     with tab2:
