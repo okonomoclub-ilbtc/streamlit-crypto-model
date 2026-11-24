@@ -372,36 +372,46 @@ else:
         else:
             st.warning("No hay suficientes velas en el rango seleccionado para generar la comparativa IS/OOS.")
 
-    # =========================================================================
-    # PESTAÑA 4: NOTICIAS RECTORAS (COINDESK)
-    # =========================================================================
+       # --- PESTAÑA 4: NOTICIAS RECTORAS EN TIEMPO REAL ---
     with tab4:
         st.subheader(f"📰 Despachos del Mercado y Fundamentales: {crypto}")
-        rss_url = "coindesk.com"
-        feed = feedparser.parse(rss_url)
+        
+        dominio_news = "https://" + "://cointelegraph.com"
+        ruta_rss = "/rss"
+        rss_url = f"{dominio_news}{ruta_rss}"
+        
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        
+        try:
+            resp_news = requests.get(rss_url, headers=headers, timeout=8)
+            feed = feedparser.parse(resp_news.content)
+        except Exception:
+            feed = None
+
         ticker_base = crypto.split('-')[0].lower()
-        if feed.entries and len(feed.entries) > 0:
-            noticias_despachadas = 0
-            for entry in feed.entries:
-                titulo_has_kw = (
-                    ticker_base in entry.title.lower()
-                    or "crypto" in entry.title.lower()
-                    or "bitcoin" in entry.title.lower()
-                )
-                if titulo_has_kw:
-                    with st.expander(f"🔸 {entry.title}"):
-                        st.write(getattr(entry, 'summary', 'Despacho oficial de CoinDesk disponible en el enlace inferior.'))
-                        st.link_button("Leer Noticia Completa en CoinDesk", entry.link, key=f"ln_coindesk_{noticias_despachadas}")
-                    noticias_despachadas += 1
-                    if noticias_despachadas >= 5:
-                        break
-            if noticias_despachadas == 0:
-                for i, entry in enumerate(feed.entries[:4]):
-                    with st.expander(f"🔸 {entry.title}"):
-                        st.write(getattr(entry, 'summary', 'Noticia destacada del ecosistema blockchain.'))
-                        st.link_button("Leer en CoinDesk", entry.link, key=f"ln_fallback_{i}")
+        nombres_clave = {
+            "btc": ["btc", "bitcoin"],
+            "eth": ["eth", "ethereum"],
+            "sol": ["sol", "solana"],
+            "bnb": ["bnb", "binance"],
+            "xrp": ["xrp", "ripple"]
+        }
+        palabras = nombres_clave.get(ticker_base, [ticker_base, "cripto", "mercado"])
+
+        if feed and getattr(feed, "entries", None):
+            noticias_filtradas = [
+                e for e in feed.entries 
+                if any(p in e.title.lower() for p in palabras)
+            ]
+            lista_mostrar = noticias_filtradas[:5] if noticias_filtradas else feed.entries[:5]
+            
+            for idx, entry in enumerate(lista_mostrar):
+                with st.expander(f"🔸 {entry.title}"):
+                    resumen = getattr(entry, 'summary', 'Haz clic en el botón inferior para leer el despacho completo.')
+                    st.markdown(resumen, unsafe_allow_html=True)
+                    st.link_button("Leer Noticia Completa", entry.link, key=f"btn_news_{idx}")
         else:
-            st.info("Sincronizando búfer alternativo de noticias de CoinDesk...")
+            st.warning("⚠️ No se pudo conectar con el servidor RSS en este instante. Intenta recargar en unos segundos.")
 
     # =========================================================================
     # PESTAÑA 5: MANUAL COMPLETO INTERACTIVO
