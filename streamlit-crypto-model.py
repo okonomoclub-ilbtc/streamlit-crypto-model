@@ -83,7 +83,7 @@ st.sidebar.write("📢 **Canales Oficiales QuantumTradeA:**")
 link_tg = "https://" + "t.me/quantumtradear"
 link_x = "https://" + "://x.com"
 st.sidebar.markdown(f"✈️ **[Telegram @quantumtradear]({link_tg})**")
-st.sidebar.markdown(f"𝕏 **[Twitter / X @bookbinderr]({link_x})**")
+st.sidebar.markdown(f"𝕏 **[Twitter / X @thebookbinderr]({link_x})**")
 
 # --- CARGA DE DATOS ---
 df = load_data_v10(crypto, days=history_days)
