@@ -12,6 +12,10 @@ from core_strategy import (
     calcular_indicadores_variante_c,
     ejecutar_backtest_variante_c
 )
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense, Dropout
+import tensorflow as tf
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="AI Crypto Strategist & Sentinel V11 Pro", layout="wide")
