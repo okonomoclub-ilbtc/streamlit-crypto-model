@@ -281,11 +281,7 @@ else:
         * Deflated Sharpe Ratio (DSR): 91.3% (N=10) / 87.8% (N=20).
         """)
         st.markdown("---")
-        st.markdown(
-            "🛡️ QuantumTradeA 2026 | Desarrollado con rigor por @thebookbinderr-2026 | "
-            "Herramienta estrictamente educativa y de investigación cuantitativa. No constituye asesoría financiera."
-        )
-
+        
 # --- PIE DE PÁGINA: CREDENCIALES ---
 st.markdown("---")
 st.markdown("🛡️ QuantumTradeA 2026 | Desarrollado con rigor por @Bookbinderr-2026", unsafe_allow_html=True)
