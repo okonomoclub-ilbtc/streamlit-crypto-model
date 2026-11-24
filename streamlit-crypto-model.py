@@ -195,14 +195,27 @@ else:
                 key="admin_pwd_field"
             )
 
+            # Cálculo automático de fechas y horas exactas (UTC y Venezuela UTC-4)
+            fecha_vela_cerrada = df.index[-1]
+            fecha_entrada_utc = fecha_vela_cerrada + pd.Timedelta(days=1)
+            fecha_salida_utc = fecha_vela_cerrada + pd.Timedelta(days=2)
+
+            entrada_vet = fecha_entrada_utc - pd.Timedelta(hours=4)
+            salida_vet = fecha_salida_utc - pd.Timedelta(hours=4)
+
+            txt_entrada = f"{fecha_entrada_utc.strftime('%d/%m/%Y')} 00:00 UTC ({entrada_vet.strftime('%d/%m/%Y %I:%M %p')} VET)"
+            txt_salida = f"{fecha_salida_utc.strftime('%d/%m/%Y')} 00:00 UTC ({salida_vet.strftime('%d/%m/%Y %I:%M %p')} VET)"
+
             direccion_txt = "COMPRA (LONG) 🚀" if tipo_op == "LONG" else "VENTA (SHORT) 📉"
             msg_alert = (
                 f"🚨 *NUEVA SEÑAL SENTINEL V10 PRO*\n\n"
                 f"• **Activo:** {crypto}\n"
                 f"• **Tipo:** {direccion_txt}\n"
-                f"• **Precio Entrada:** ${precio_actual:,.2f} USD\n"
+                f"• **Precio Entrada Ref.:** ${precio_actual:,.2f} USD\n"
                 f"• **Tamaño Sugerido:** {pos_size / precio_actual:.5f} unidades\n"
-                f"⏱️ **Salida Rígida:** 24 Horas Estrictas"
+                f"• **Entrada Estimada:** {txt_entrada}\n"
+                f"• **Salida Estimada (24h):** {txt_salida}\n"
+                f"⏱️ **Regla de Salida:** Cierre rígido a las 24 horas exactas"
             )
 
             if st.button(f"✈️ Despachar Alerta {tipo_op} a Telegram", key="btn_dispatch_signal"):
