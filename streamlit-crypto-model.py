@@ -75,7 +75,8 @@ st.sidebar.title("⚙️ Parámetros Sentinel V11")
 crypto = st.sidebar.selectbox(
     "Activo de Análisis (Portafolio 25% c/u)",
     ACTIVOS_PORTAFOLIO,
-    index=0")
+    index=0
+)
 anios_historial = st.sidebar.select_slider(
     "Historial de Análisis (Años)",
     options=[1, 2, 3, 5, 7, 10, "Máximo"],
