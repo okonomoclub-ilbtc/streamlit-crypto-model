@@ -10,7 +10,10 @@ from core_strategy import (
     ACTIVOS_PORTAFOLIO,
     PESO_POR_ACTIVO,
     calcular_indicadores_variante_c,
-    ejecutar_backtest_variante_c
+    ejecutar_backtest_variante_c,
+    ejecutar_backtest_portafolio,
+    generar_pine_script_v6,
+    generar_manual_markdown
 )
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential
@@ -72,14 +75,12 @@ st.sidebar.title("⚙️ Parámetros Sentinel V11")
 crypto = st.sidebar.selectbox(
     "Activo de Análisis (Portafolio 25% c/u)",
     ACTIVOS_PORTAFOLIO,
-    index=0
-)
+    index=0")
 anios_historial = st.sidebar.select_slider(
     "Historial de Análisis (Años)",
     options=[1, 2, 3, 5, 7, 10, "Máximo"],
     value=5
 )
-
 # Conversión exacta a días naturales (cripto opera 365 días/año)
 history_days = 10000 if anios_historial == "Máximo" else anios_historial * 365
 capital_total = st.sidebar.number_input("Capital Total del Portafolio ($)", min_value=100.0, value=100000.0, step=1000.0)
@@ -107,14 +108,14 @@ else:
     now = df.iloc[-1]
     fecha_cierre = df.index[-1]
 
-    precio_actual = float(now['Close'])
-    sma50_actual = float(now['sma_50'])
-    sma5_actual = float(now['sma_5'])
-    atr_actual = float(now['atr_14'])
-    impulso_atr_actual = float(now['impulso_atr'])
-    ret3d_actual = float(now['retorno_3d_pct'])
-    es_habil = bool(now['es_dia_habil'])
-    senal_activa = bool(now['cond_entrada'])
+    precio_actual = float(now["Close"])
+    sma50_actual = float(now["sma_50"])
+    sma5_actual = float(now["sma_5"])
+    atr_actual = float(now["atr_14"])
+    impulso_atr_actual = float(now["impulso_atr"])
+    ret3d_actual = float(now["retorno_3d_pct"])
+    es_habil = bool(now["es_dia_habil"])
+    senal_activa = bool(now["cond_entrada"])
 
     # --- VISTA PRINCIPAL DEL DASHBOARD ---
     st.title("💎 AI Crypto Strategist & Sentinel V11 Pro")
@@ -125,25 +126,25 @@ else:
 
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "🎯 Dictamen y Ejecución",
-        "🌐 Radar Multiactivo (25% c/u)",
+        "🌐 Radar Multiactivo + LSTM",
         "📈 Backtest Histórico",
         "📰 Noticias de Mercado",
-        "📖 Manual Operativo"
+        "📖 Manual, Pine Script y Feedback"
     ])
 
     # =========================================================================
     # PESTAÑA 1: GRÁFICO PRO E INTERFAZ DE ALERTAS
     # =========================================================================
     with tab1:
-        longs = df[df['cond_entrada']]
+        longs = df[df["cond_entrada"]]
 
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name="Precio Real", line=dict(color='#F8FAFC', width=2)))
-        fig.add_trace(go.Scatter(x=df.index, y=df['sma_50'], name="SMA 50 (Filtro Macro)", line=dict(color='#3B82F6', width=1.6)))
-        fig.add_trace(go.Scatter(x=df.index, y=df['sma_5'], name="SMA 5 (Salida Dinámica)", line=dict(color='#F59E0B', width=1.2, dash='dot')))
+        fig.add_trace(go.Scatter(x=df.index, y=df["Close"], name="Precio Real", line=dict(color="#F8FAFC", width=2)))
+        fig.add_trace(go.Scatter(x=df.index, y=df["sma_50"], name="SMA 50 (Filtro Macro)", line=dict(color="#3B82F6", width=1.6)))
+        fig.add_trace(go.Scatter(x=df.index, y=df["sma_5"], name="SMA 5 (Salida Dinámica)", line=dict(color="#F59E0B", width=1.2, dash="dot")))
         fig.add_trace(go.Scatter(
-            x=longs.index, y=longs['Close'] * 0.96, mode='markers',
-            name="Gatillo Long (Impulso 3D + SMA 50)", marker=dict(symbol='triangle-up', size=11, color='#10B981')
+            x=longs.index, y=longs["Close"] * 0.96, mode="markers",
+            name="Gatillo Long (Impulso 3D + SMA 50)", marker=dict(symbol="triangle-up", size=11, color="#10B981")
         ))
         fig.update_layout(template="plotly_dark", height=450, margin=dict(l=10, r=10, t=20, b=10), hovermode="x unified")
         st.plotly_chart(fig, use_container_width=True)
@@ -185,7 +186,7 @@ else:
         col_o1, col_o2, col_o3, col_o4 = st.columns(4)
         col_o1.metric(f"Límite de Pérdida ({riesgo_deseado}%)", f"${capital_arriesgar:,.2f} USD")
         col_o2.metric("Exposición Nominal (Spot 1.0x)", f"${pos_size:,.2f} USD")
-        col_o3.metric("Tamaño Sugerido", f"{unidades_sugeridas:.5f} {crypto.split('-')}")
+        col_o3.metric("Tamaño Sugerido", f"{unidades_sugeridas:.5f} {crypto.split('-')[0]}")
         col_o4.metric("Hard Stop (2.5 ATR)", f"${stop_price:,.2f} USD")
 
         if senal_activa:
@@ -201,7 +202,7 @@ else:
             txt_entrada = f"{fecha_entrada_utc.strftime('%d/%m/%Y')} 00:00 UTC ({entrada_vet.strftime('%d/%m/%Y %I:%M %p')} VET)"
 
             msg_alert = (
-                f"🚨 *NUEVA SEÑAL SENTINEL V11 PRO (PORTAFOLIO 25%)\n\n"
+                f"🚨 *NUEVA SEÑAL SENTINEL V11 PRO (PORTAFOLIO 25%)*\n\n"
                 f"• **Activo:** {crypto} (Asignación 25%)\n"
                 f"• **Tipo:** COMPRA SPOT (LONG) 🚀\n"
                 f"• **Precio Entrada Ref.:** ${precio_actual:,.2f} USD\n"
@@ -223,7 +224,7 @@ else:
                     st.error("❌ Clave incorrecta. Intento de despacho bloqueado por seguridad.")
 
     # =========================================================================
-    # PESTAÑA 2: RADAR MULTIACTIVO (LAS 4 CRIPTOS AL 25% C/U)
+    # PESTAÑA 2: RADAR MULTIACTIVO (25% C/U) + MODELO PREDICTIVO LSTM
     # =========================================================================
     with tab2:
         st.subheader("🌐 Radar Multiactivo en Vivo (Asignación 25% por Activo)")
@@ -237,11 +238,11 @@ else:
             if not df_item.empty:
                 df_ind = calcular_indicadores_variante_c(df_item)
                 ult = df_ind.iloc[-1]
-                p_act = float(ult['Close'])
-                s50 = float(ult['sma_50'])
-                imp = float(ult['impulso_atr'])
-                atr_i = float(ult['atr_14'])
-                activa = bool(ult['cond_entrada'])
+                p_act = float(ult["Close"])
+                s50 = float(ult["sma_50"])
+                imp = float(ult["impulso_atr"])
+                atr_i = float(ult["atr_14"])
+                activa = bool(ult["cond_entrada"])
                 estado_txt = "🚀 GATILLO LONG" if activa else ("🛡️ DEFENSIVE CASH" if p_act <= s50 else "😴 EN ESPERA")
                 filas_radar.append({
                     "Activo": ticker_item,
@@ -255,46 +256,40 @@ else:
                 })
         if filas_radar:
             st.table(pd.DataFrame(filas_radar))
-                # ======================================================================
-        # BLOQUE INFERIOR PESTAÑA 2: MODELO PREDICTIVO LSTM (PROYECCIÓN 7 DÍAS)
-        # ======================================================================
+
+        # --- BLOQUE INFERIOR PESTAÑA 2: MODELO PREDICTIVO LSTM (PROYECCIÓN 7 DÍAS) ---
         st.markdown("---")
         st.subheader(f"🤖 Proyección Neuronal LSTM — Horizonte 7 Días ({crypto})")
         st.caption(f"Entrenamiento sobre {len(df)} velas diarias ({anios_historial} {'años' if anios_historial != 1 else 'año'}) con división temporal estricta (80% Train / 20% Test).")
-
         if len(df) < 120:
             st.warning("⚠️ Se requieren al menos 120 días de historial para entrenar la red neuronal LSTM.")
         else:
             epochs_n = st.slider("Épocas de Entrenamiento LSTM", min_value=5, max_value=50, value=15, step=5, key="slider_epochs_lstm")
-
             if st.button("🔥 Ejecutar Proyección Predictiva 7 Días (LSTM)", key="btn_ia_7d_radar"):
                 with st.spinner(f"Entrenando red LSTM con {len(df)} jornadas históricas..."):
+                    np.random.seed(7)
+                    tf.random.set_seed(7)
                     scaler = MinMaxScaler()
-                    data_values = df[['Close']].values
+                    data_values = df[["Close"]].values
                     split_idx = int(len(data_values) * 0.8)
-
                     # Ajuste exclusivo en muestra de entrenamiento (evita fuga de datos)
                     scaler.fit(data_values[:split_idx])
                     scaled_all = scaler.transform(data_values)
-
                     ventana = 60
                     X, y = [], []
                     for i in range(ventana, len(scaled_all)):
                         X.append(scaled_all[i - ventana:i, 0])
                         y.append(scaled_all[i, 0])
-                    
                     X, y = np.array(X), np.array(y)
                     X = np.expand_dims(X, axis=-1)
-
                     model = Sequential([
                         LSTM(50, return_sequences=True, input_shape=(ventana, 1)),
                         Dropout(0.2),
                         LSTM(50),
                         Dense(1)
                     ])
-                    model.compile(optimizer='adam', loss='mse')
+                    model.compile(optimizer="adam", loss="mse")
                     model.fit(X, y, epochs=epochs_n, batch_size=32, verbose=0)
-
                     # Generación recursiva de los próximos 7 días
                     future_preds = []
                     current_batch = scaled_all[-ventana:].reshape(1, ventana, 1)
@@ -302,21 +297,19 @@ else:
                         p = model.predict(current_batch, verbose=0)
                         future_preds.append(p)
                         current_batch = np.append(current_batch[:, 1:, :], p.reshape(1, 1, 1), axis=1)
-
                     preds_7d = scaler.inverse_transform(np.array(future_preds).reshape(-1, 1)).flatten()
                     f_dates = [df.index[-1] + pd.Timedelta(days=i) for i in range(1, 8)]
-
                     # Gráfico interactivo de proyección
                     fig_7d = go.Figure()
                     fig_7d.add_trace(go.Scatter(
-                        x=df.index[-30:], y=df['Close'].tail(30),
-                        mode='lines', name="Últimos 30 días reales",
-                        line=dict(color='#94A3B8', width=2)
+                        x=df.index[-30:], y=df["Close"].tail(30),
+                        mode="lines", name="Últimos 30 días reales",
+                        line=dict(color="#94A3B8", width=2)
                     ))
                     fig_7d.add_trace(go.Scatter(
                         x=f_dates, y=preds_7d,
-                        mode='lines+markers', name="Proyección LSTM (7D)",
-                        line=dict(color='#EF4444', width=3)
+                        mode="lines+markers", name="Proyección LSTM (7D)",
+                        line=dict(color="#EF4444", width=3)
                     ))
                     fig_7d.update_layout(
                         template="plotly_dark",
@@ -325,24 +318,58 @@ else:
                         margin=dict(l=10, r=10, t=40, b=10)
                     )
                     st.plotly_chart(fig_7d, use_container_width=True)
-
                     # Tabla detallada de precios estimados
                     pred_df = pd.DataFrame({
-                        'Fecha Estimada (UTC)': [d.strftime('%d/%m/%Y') for d in f_dates],
-                        'Precio Proyectado ($)': [f"${p:,.2f}" for p in preds_7d],
-                        'Variación vs Último Cierre': [f"{((p / precio_actual) - 1) * 100:+.2f}%" for p in preds_7d]
+                        "Fecha Estimada (UTC)": [d.strftime("%d/%m/%Y") for d in f_dates],
+                        "Precio Proyectado ($)": [f"${p:,.2f}" for p in preds_7d],
+                        "Variación vs Último Cierre": [f"{((p / precio_actual) - 1) * 100:+.2f}%" for p in preds_7d]
                     })
                     st.table(pred_df)
 
     # =========================================================================
-    # PESTAÑA 3: BACKTEST HISTÓRICO DINÁMICO
+    # PESTAÑA 3: BACKTEST CONSOLIDADO (4 CRIPTOS) + INDIVIDUAL POR ACTIVO
     # =========================================================================
     with tab3:
-        st.subheader(f"🎯 Panel Forense Oficial de Sentinel V11 Pro: {crypto}")
+        st.subheader("🏆 1. Backtest Consolidado del Portafolio (25% BTC · 25% ETH · 25% SOL · 25% XRP)")
         st.caption(
-            f"Simulación causal sobre la asignación del 25% (${capital_asignado_activo:,.2f} USD) | "
+            f"Simulación causal multiactivo sobre ${capital_total:,.2f} USD totales | "
             f"Fricción real: 30 bps roundtrip | Hard Stop: 2.5 × ATR | Salida: Cierre < SMA(5)"
         )
+        datos_4_is, datos_4_oos, datos_4_all = {}, {}, {}
+        for t_port in ACTIVOS_PORTAFOLIO:
+            d_full = load_data_v11(t_port, days=history_days)
+            if not d_full.empty:
+                datos_4_all[t_port] = d_full
+                datos_4_is[t_port] = d_full[d_full.index <= "2024-06-14"]
+                datos_4_oos[t_port] = d_full[d_full.index >= "2024-06-15"]
+        p_trades_is, p_eq_is, p_res_is = ejecutar_backtest_portafolio(datos_4_is, capital_total, riesgo_deseado / 100.0)
+        p_trades_oos, p_eq_oos, p_res_oos = ejecutar_backtest_portafolio(datos_4_oos, capital_total, riesgo_deseado / 100.0)
+        p_trades_all, p_eq_all, p_res_all = ejecutar_backtest_portafolio(datos_4_all, capital_total, riesgo_deseado / 100.0)
+        if p_res_is and p_res_oos:
+            tabla_port = pd.DataFrame({
+                "Métrica Institucional (Portafolio 4 Criptos)": list(p_res_is.keys()),
+                "Fase In-Sample (2020-2024)": list(p_res_is.values()),
+                "Fase Out-Of-Sample (2024-2026)": list(p_res_oos.values()),
+                "Muestra Completa": list(p_res_all.values())
+            })
+            st.table(tabla_port)
+            if not p_eq_all.empty:
+                fig_port = go.Figure()
+                fig_port.add_trace(go.Scatter(
+                    x=p_eq_all.index, y=p_eq_all["Equity"], name="Curva Portafolio Consolidado ($)",
+                    line=dict(color="#3B82F6", width=2.5)
+                ))
+                fig_port.add_vline(x="2024-06-15", line_dash="dash", line_color="#F59E0B")
+                fig_port.update_layout(
+                    template="plotly_dark", title="Evolución de Capital Consolidado (4 Criptos Equiponderadas al 25%)",
+                    height=380, margin=dict(l=10, r=10, t=40, b=10)
+                )
+                st.plotly_chart(fig_port, use_container_width=True)
+            if not p_trades_oos.empty:
+                st.write("#### 🧾 Últimas Operaciones del Portafolio (Out-of-Sample)")
+                st.dataframe(p_trades_oos.tail(10), use_container_width=True)
+        st.markdown("---")
+        st.subheader(f"🎯 2. Desglose Individual del Activo Seleccionado: {crypto} (Asignación 25% = ${capital_asignado_activo:,.2f} USD)")
         df_is = df_raw[df_raw.index <= "2024-06-14"]
         df_oos = df_raw[df_raw.index >= "2024-06-15"]
         trades_is, eq_is, res_is = ejecutar_backtest_variante_c(df_is, capital_asignado_activo, riesgo_deseado / 100.0)
@@ -359,8 +386,8 @@ else:
             if not eq_all.empty:
                 fig_eq = go.Figure()
                 fig_eq.add_trace(go.Scatter(
-                    x=eq_all.index, y=eq_all['Equity'], name="Curva de Capital Neto ($)",
-                    line=dict(color='#10B981', width=2.2)
+                    x=eq_all.index, y=eq_all["Equity"], name="Curva de Capital Neto ($)",
+                    line=dict(color="#10B981", width=2.2)
                 ))
                 fig_eq.add_vline(x="2024-06-15", line_dash="dash", line_color="#F59E0B")
                 fig_eq.update_layout(
@@ -369,27 +396,23 @@ else:
                 )
                 st.plotly_chart(fig_eq, use_container_width=True)
             if not trades_oos.empty:
-                st.write("#### 🧾 Registro de Últimas Operaciones Out-of-Sample")
+                st.write(f"#### 🧾 Registro de Últimas Operaciones Out-of-Sample ({crypto})")
                 st.dataframe(trades_oos.tail(10), use_container_width=True)
         else:
             st.warning("No hay suficientes velas en el rango seleccionado para generar la comparativa IS/OOS.")
 
-       # --- PESTAÑA 4: NOTICIAS RECTORAS EN TIEMPO REAL ---
+    # =========================================================================
+    # PESTAÑA 4: NOTICIAS RECTORAS EN TIEMPO REAL
+    # =========================================================================
     with tab4:
         st.subheader(f"📰 Despachos del Mercado y Fundamentales: {crypto}")
-        
-        dominio_news = "https://" + "://cointelegraph.com"
-        ruta_rss = "/rss"
-        rss_url = f"{dominio_news}{ruta_rss}"
-        
+        rss_url = "cointelegraph.com"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        
         try:
             resp_news = requests.get(rss_url, headers=headers, timeout=8)
             feed = feedparser.parse(resp_news.content)
         except Exception:
             feed = None
-
         ticker_base = crypto.split('-')[0].lower()
         nombres_clave = {
             "btc": ["btc", "bitcoin"],
@@ -399,14 +422,12 @@ else:
             "xrp": ["xrp", "ripple"]
         }
         palabras = nombres_clave.get(ticker_base, [ticker_base, "cripto", "mercado"])
-
         if feed and getattr(feed, "entries", None):
             noticias_filtradas = [
-                e for e in feed.entries 
+                e for e in feed.entries
                 if any(p in e.title.lower() for p in palabras)
             ]
             lista_mostrar = noticias_filtradas[:5] if noticias_filtradas else feed.entries[:5]
-            
             for idx, entry in enumerate(lista_mostrar):
                 with st.expander(f"🔸 {entry.title}"):
                     resumen = getattr(entry, 'summary', 'Haz clic en el botón inferior para leer el despacho completo.')
@@ -416,11 +437,30 @@ else:
             st.warning("⚠️ No se pudo conectar con el servidor RSS en este instante. Intenta recargar en unos segundos.")
 
     # =========================================================================
-    # PESTAÑA 5: MANUAL COMPLETO INTERACTIVO
+    # PESTAÑA 5: MANUAL DESCARGABLE, PINE SCRIPT TRADINGVIEW Y FEEDBACK
     # =========================================================================
     with tab5:
-        st.header("📖 Manual Operativo Oficial: Sentinel V11 Pro")
-        st.caption("FAQ y Protocolo Cuantitativo de Ejecución Sistemática Multiactivo (Estándar UTC)")
+        st.header("📖 Manual Operativo Oficial, Pine Script y Experiencia de Usuario")
+        st.caption("FAQ, Protocolo Cuantitativo Multiactivo (Estándar UTC) y Recursos Reproducibles")
+        # --- BOTONES DE DESCARGA DIRECTA ---
+        col_dl1, col_dl2 = st.columns(2)
+        with col_dl1:
+            st.download_button(
+                label="📥 Descargar Manual Científico y Hallazgos (.md)",
+                data=generar_manual_markdown(),
+                file_name="Manual_Cientifico_Crypto_Macro_VarianteC.md",
+                mime="text/markdown",
+                use_container_width=True
+            )
+        with col_dl2:
+            st.download_button(
+                label="🔔 Descargar Script Pine Script v6 para TradingView (.pine)",
+                data=generar_pine_script_v6(),
+                file_name="QuantumTradeA_Crypto_Macro_VarianteC_v6.pine",
+                mime="text/plain",
+                use_container_width=True
+            )
+        st.markdown("---")
         with st.expander("❓ Q1: ¿Cuándo se toma EXACTAMENTE la entrada tras una señal activa?"):
             st.markdown("""
             * Respuesta Directa: La entrada JAMÁS se ejecuta en tiempo real durante el desarrollo del día si el indicador parpadea. Toda alerta del dictaminador técnico se valida al cierre oficial de la vela diaria (23:59 UTC).
@@ -436,6 +476,9 @@ else:
             * Salida Dinámica por Tendencia (Cierre < SMA 5): En lugar de cortar ganancias prematuramente a las 24 horas, dejamos correr las expansiones alcistas hasta que la vela diaria cierra por debajo de su media móvil rápida de 5 períodos.
             * Cinturón de Seguridad (Hard Stop 2.5 × ATR): Toda posición nace protegida desde el primer segundo con un Stop Loss catastrófico situado a 2.5 veces la volatilidad diaria (ATR 14), limitando la pérdida máxima por operación al porcentaje de riesgo configurado.
             """)
+        with st.expander("💻 Ver Código Completo para TradingView (Pine Script v6)"):
+            st.caption("Copia este código y pégalo en el Editor Pine de TradingView sobre un gráfico diario (1D).")
+            st.code(generar_pine_script_v6(), language="javascript")
         st.markdown("---")
         st.subheader("📐 Especificaciones Técnicas del Núcleo Lógico (Variante C)")
         st.markdown("""
@@ -473,14 +516,47 @@ else:
             st.warning(f"⚠️ Alerta de Margen Spot: El lote por riesgo requiere {apalancamiento_requerido:.2f}x. En modo Spot 1.0x se topará al 100% de tu asignación (${capital_sim:,.2f} USD).")
         else:
             st.success(f"✅ Gestión Segura Spot: Exposición al {apalancamiento_requerido * 100:.1f}% de tu asignación. Posición totalmente protegida.")
+        # --- MÓDULO DE EXPERIENCIA DE USUARIO Y FEEDBACK ---
+        st.markdown("---")
+        st.subheader("💬 Tu Experiencia y Feedback (Ayúdanos a mejorar)")
+        st.write("Queremos saber cómo te sientes usando esta herramienta y qué te gustaría ver en próximas actualizaciones:")
+        col_fb1, col_fb2 = st.columns(2)
+        with col_fb1:
+            sensacion = st.radio(
+                "¿Cómo te sientes respecto a la claridad y transparencia de las reglas?",
+                [
+                    "🤩 Muy tranquilo/a y con claridad total",
+                    "🙂 Cómodo/a, aunque estoy explorando los números",
+                    "🤔 Tengo dudas sobre cómo ejecutar las señales",
+                    "😕 Me gustaría que fuera aún más simple"
+                ],
+                key="fb_feeling"
+            )
+        with col_fb2:
+            comentario_fb = st.text_area(
+                "¿Qué mejora, activo o explicación te gustaría añadir?",
+                placeholder="Escribe aquí tus impresiones o sugerencias...",
+                key="fb_comment"
+            )
+        if st.button("📩 Enviar Feedback", key="btn_send_fb"):
+            if comentario_fb.strip() or sensacion:
+                resumen_fb = (
+                    f"📝 FEEDBACK DE USUARIO (SENTINEL V11)\n"
+                    f"• Estado: {sensacion}\n"
+                    f"• Comentario: {comentario_fb if comentario_fb.strip() else 'Sin comentario adicional'}"
+                )
+                if TOKEN_TELEGRAM and CHAT_ID:
+                    despachar_alerta_telegram(resumen_fb)
+                st.success("¡Gracias por compartir cómo te sientes! Tu respuesta nos ayuda a construir herramientas más claras y humanas.")
 
-# --- PIE DE PÁGINA: CREDENCIALES ---
-st.markdown("---")
-st.markdown("🛡️ QuantumTradeA 2026 | Desarrollado con rigor por @QuantLab-2026", unsafe_allow_html=True)
-st.markdown(
-    "🚨 NOTA MARGINAL DE DESCARGO LEGAL: Esta aplicación web interactiva ha sido construida con fines estrictamente educativos, "
-    "didácticos y de investigación estadística avanzada bajo la metodología de la ingeniería cuantitativa. Ninguno de los datos, alertas o "
-    "fichas de órdenes recomendadas constituye una recomendación de inversión o asesoría financiera oficial. Los rendimientos pasados "
-    "presentados en el registro de robustez no garantizan retornos futuros.",
-    unsafe_allow_html=True
-)
+        # --- PIE DE PÁGINA: CREDENCIALES ---
+        st.markdown("---")
+        st.markdown("🛡️ QuantumTradeA 2026 | Desarrollado con rigor por @QuantLab-2026", unsafe_allow_html=True)
+        st.markdown(
+            "🚨 NOTA MARGINAL DE DESCARGO LEGAL: Esta aplicación web interactiva ha sido construida con fines estrictamente educativos, "
+            "didácticos y de investigación estadística avanzada bajo la metodología de la ingeniería cuantitativa. Ninguno de los datos, alertas o "
+            "fichas de órdenes recomendadas constituye una recomendación de inversión o asesoría financiera oficial. Los rendimientos pasados "
+            "presentados en el registro de robustez no garantizan retornos futuros.",
+            unsafe_allow_html=True
+        )
+
