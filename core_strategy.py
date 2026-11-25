@@ -155,7 +155,7 @@ def ejecutar_backtest_portafolio(diccionario_dfs: dict, capital_total: float = 1
     return df_trades_all, df_eq_combinado[['Equity']], resumen
 
 def generar_pine_script_v6() -> str:
-    """Devuelve el código Pine Script v6 con paridad exacta al motor Python."""
+    """Devuelve el código Pine Script v6 con panel de control, etiquetas de entrada/salida y paridad Python."""
     return """// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org
 // © QuantumTradeA · Bookbinderr-2026
 //@version=6
@@ -167,17 +167,18 @@ strategy("Crypto Macro Momentum [Variante C - Validada]", shorttitle="Macro Mom 
 
 // ========= Parámetros Validados (Sin Sobreajuste) =========
 grpReglas = "Parámetros Estructurales (Variante C)"
-smaMacroLen = input.int(50, "SMA Filtro Macro (velas)", minval=10, group=grpReglas)
-smaExitLen  = input.int(5,  "SMA Salida Rápida (velas)", minval=2, group=grpReglas)
-atrLen      = input.int(14, "ATR Volatilidad (velas)", minval=1, group=grpReglas)
-impBars     = input.int(3,  "Ventana Impulso (días)", minval=1, group=grpReglas)
-impMult     = input.float(1.0, "Umbral Impulso (× ATR)", step=0.1, group=grpReglas)
-stopMult    = input.float(2.5, "Hard Stop Catastrófico (× ATR)", step=0.1, group=grpReglas)
+smaMacroLen  = input.int(50, "SMA Filtro Macro (velas)", minval=10, group=grpReglas)
+smaExitLen   = input.int(5,  "SMA Salida Rápida (velas)", minval=2, group=grpReglas)
+atrLen       = input.int(14, "ATR Volatilidad (velas)", minval=1, group=grpReglas)
+impBars      = input.int(3,  "Ventana Impulso (días)", minval=1, group=grpReglas)
+impMult      = input.float(1.0, "Umbral Impulso (× ATR)", step=0.1, group=grpReglas)
+stopMult     = input.float(2.5, "Hard Stop Catastrófico (× ATR)", step=0.1, group=grpReglas)
 onlyWeekdays = input.bool(true, "Operar solo días hábiles UTC (Lunes a Viernes)", group=grpReglas)
+showPanel    = input.bool(true, "Mostrar Panel de Estado en Gráfico", group=grpReglas)
 
-// ========= Comprobación de Temporalidad =========
-if barstate.isfirst and timeframe.period != "D"
-    runtime.error("Este script está calibrado exclusivamente para velas diarias (1D UTC).")
+// ========= Comprobación de Temporalidad (Acepta 1D / D) =========
+if barstate.isfirst and not timeframe.isdaily
+    runtime.error("Este script está calibrado exclusivamente para velas diarias (1D UTC). Actual: " + timeframe.period)
 
 // ========= Indicadores Causales (Al Cierre de Vela) =========
 sma50 = ta.sma(close, smaMacroLen)
@@ -187,33 +188,87 @@ atr14 = ta.rma(ta.tr(true), atrLen)
 impulso3D  = close - close[impBars]
 impulsoATR = atr14 > 0 ? impulso3D / atr14 : 0.0
 
-// Calendario institucional UTC (Lunes=2 ... Viernes=6 en Pine Script)
-dowUTC = dayofweek(time, "UTC")
+// Calendario institucional UTC (Lunes=2 ... Viernes=6)
+dowUTC     = dayofweek(time, "UTC")
 esDiaHabil = not onlyWeekdays or (dowUTC >= dayofweek.monday and dowUTC <= dayofweek.friday)
 
-// Señales evaluadas al cierre (se ejecutan en la apertura siguiente)
+// Señales evaluadas al cierre (se ejecutan en la apertura de la siguiente vela)
 condEntrada = close > sma50 and impulsoATR >= impMult and esDiaHabil
 condSalida  = close < sma5
 
-// ========= Redirección de Apertura Siguiente + Hard Stop =========
-var float stopPrice = na
+// ========= Ejecución Next-Bar Open + Hard Stop =========
+var float stopPrice  = na
+var float entryPrice = na
 
-if strategy.position_size == 0 and condEntrada
+bool gatilloLong = strategy.position_size == 0 and condEntrada
+bool gatilloExit = strategy.position_size > 0 and condSalida
+
+if gatilloLong
     strategy.entry("LongMacro", strategy.long, comment="LONG Impulso 3D")
-    stopPrice := close - stopMult * atr14
+    stopPrice  := close - stopMult * atr14
+    entryPrice := close
 
 if strategy.position_size > 0
     if condSalida
-        strategy.close("LongMacro", comment="Salida < SMA(5)")
-        stopPrice := na
+        strategy.close("LongMacro", comment="EXIT < SMA(5)")
+        stopPrice  := na
+        entryPrice := na
     else if not na(stopPrice)
-        strategy.exit("HardStop", from_entry="LongMacro", stop=stopPrice, comment="Stop 2.5 ATR")
+        strategy.exit("HardStop", from_entry="LongMacro", stop=stopPrice, comment="STOP 2.5 ATR")
 
-// ========= Visualización en Gráfico =========
+if strategy.position_size == 0 and not gatilloLong
+    stopPrice  := na
+    entryPrice := na
+
+// Detectar cierre real de posición para señalización visual
+bool cerroEnEstaVela = strategy.position_size == 0 and strategy.position_size[1] > 0
+
+// ========= Renderizado Visual en el Gráfico (Líneas y Señales) =========
 plot(sma50, "SMA 50 (Régimen Macro)", color=color.new(#3B82F6, 0), linewidth=2)
 plot(sma5,  "SMA 5 (Salida Dinámica)", color=color.new(#F59E0B, 0), linewidth=1)
 plot(strategy.position_size > 0 ? stopPrice : na, "Hard Stop 2.5 ATR", color=color.new(#EF4444, 0), style=plot.style_linebr, linewidth=2)
-plotshape(condEntrada and strategy.position_size == 0, title="Señal Long", style=shape.triangleup, location=location.belowbar, color=color.new(#10B981, 0), size=size.small, text="LONG")
+
+// Etiquetas claras de Entrada y Salida
+plotshape(gatilloLong, title="Señal Entrada LONG", style=shape.labelup, location=location.belowbar,
+     color=color.new(#10B981, 0), text="LONG", textcolor=color.white, size=size.small)
+
+plotshape(cerroEnEstaVela, title="Señal Salida EXIT", style=shape.labeldown, location=location.abovebar,
+     color=color.new(#EF4444, 0), text="EXIT", textcolor=color.white, size=size.small)
+
+// ========= Panel Institucional de Estado en Tiempo Real =========
+var table panel = table.new(position.top_right, 2, 7, bgcolor=color.new(#0F172A, 12),
+     border_width=1, border_color=color.new(#334155, 0))
+
+if showPanel and barstate.islast
+    color cTxt = color.white
+    bool enPos = strategy.position_size > 0
+    bool regAlcista = close > sma50
+
+    table.cell(panel, 0, 0, "QuantumTradeA · Variante C", text_color=#38BDF8, text_size=size.small)
+    table.cell(panel, 1, 0, enPos ? "EN POSICIÓN 🚀" : (gatilloLong ? "ENTRADA NEXT OPEN 🔔" : "ESPERANDO 😴"),
+         text_color=enPos or gatilloLong ? #10B981 : #94A3B8, text_size=size.small)
+
+    table.cell(panel, 0, 1, "Régimen Macro (SMA 50)", text_color=cTxt, text_size=size.small)
+    table.cell(panel, 1, 1, regAlcista ? "ALCISTA (> SMA50) ✅" : "DEFENSIVE CASH 🛡️",
+         text_color=regAlcista ? #10B981 : #F59E0B, text_size=size.small)
+
+    table.cell(panel, 0, 2, "Impulso 3D / ATR(14)", text_color=cTxt, text_size=size.small)
+    table.cell(panel, 1, 2, str.tostring(impulsoATR, "#.##") + "x (Umbral ≥ " + str.tostring(impMult, "#.#") + "x)",
+         text_color=impulsoATR >= impMult ? #10B981 : cTxt, text_size=size.small)
+
+    table.cell(panel, 0, 3, "Calendario UTC (L-V)", text_color=cTxt, text_size=size.small)
+    table.cell(panel, 1, 3, esDiaHabil ? "DÍA HÁBIL ✅" : "FIN DE SEMANA ⏸️",
+         text_color=esDiaHabil ? #10B981 : #F59E0B, text_size=size.small)
+
+    table.cell(panel, 0, 4, "Nivel Salida SMA(5)", text_color=cTxt, text_size=size.small)
+    table.cell(panel, 1, 4, "$" + str.tostring(sma5, "#,###.##"), text_color=#F59E0B, text_size=size.small)
+
+    table.cell(panel, 0, 5, "Hard Stop (2.5 ATR)", text_color=cTxt, text_size=size.small)
+    table.cell(panel, 1, 5, enPos and not na(stopPrice) ? "$" + str.tostring(stopPrice, "#,###.##") : "$" + str.tostring(close - stopMult * atr14, "#,###.##") + " (Ref)",
+         text_color=#EF4444, text_size=size.small)
+
+    table.cell(panel, 0, 6, "ATR(14) Diario", text_color=cTxt, text_size=size.small)
+    table.cell(panel, 1, 6, "$" + str.tostring(atr14, "#,###.##"), text_color=cTxt, text_size=size.small)
 """
 
 def generar_manual_markdown() -> str:
