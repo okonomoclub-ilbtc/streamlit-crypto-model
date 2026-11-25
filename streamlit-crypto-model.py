@@ -429,40 +429,66 @@ else:
         else:
             st.warning("No hay suficientes velas en el rango seleccionado para generar la comparativa IS/OOS.")
 
-    # =========================================================================
-    # PESTAÑA 4: NOTICIAS RECTORAS EN TIEMPO REAL
+        # =========================================================================
+    # PESTAÑA 4: NOTICIAS RECTORAS EN TIEMPO REAL (CASCADA RSS REAL)
     # =========================================================================
     with tab4:
         st.subheader(f"📰 Despachos del Mercado y Fundamentales: {crypto}")
-        rss_url = "cointelegraph.com"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        try:
-            resp_news = requests.get(rss_url, headers=headers, timeout=8)
-            feed = feedparser.parse(resp_news.content)
-        except Exception:
-            feed = None
+
+        @st.cache_data(ttl=900)
+        def obtener_noticias_cascada():
+            fuentes_rss = [
+                ("CoinDesk", "https://coindesk.com"),
+                ("Decrypt", "https://decrypt.co"),
+                ("CryptoSlate", "https://cryptoslate.com"),
+            ]
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                              "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8"
+            }
+            errores = []
+            for nombre, url in fuentes_rss:
+                try:
+                    resp = requests.get(url, headers=headers, timeout=8)
+                    if resp.status_code == 200 and resp.content:
+                        parsed = feedparser.parse(resp.content)
+                        if getattr(parsed, "entries", None) and len(parsed.entries) > 0:
+                            return nombre, parsed.entries, []
+                        else:
+                            errores.append(f"{nombre}: respuesta vacía")
+                    else:
+                        errores.append(f"{nombre}: HTTP {resp.status_code}")
+                except Exception as e:
+                    errores.append(f"{nombre}: {type(e).__name__}")
+            return None, [], errores
+
+        fuente_activa, entradas_rss, errores_rss = obtener_noticias_cascada()
+
         ticker_base = crypto.split('-')[0].lower()
         nombres_clave = {
             "btc": ["btc", "bitcoin"],
             "eth": ["eth", "ethereum"],
             "sol": ["sol", "solana"],
-            "bnb": ["bnb", "binance"],
             "xrp": ["xrp", "ripple"]
         }
-        palabras = nombres_clave.get(ticker_base, [ticker_base, "cripto", "mercado"])
-        if feed and getattr(feed, "entries", None):
+        palabras = nombres_clave.get(ticker_base, [ticker_base, "crypto", "market"])
+
+        if entradas_rss:
+            st.caption(f"Fuente RSS en vivo verificada: **{fuente_activa}** (caché 15 min)")
             noticias_filtradas = [
-                e for e in feed.entries
+                e for e in entradas_rss
                 if any(p in e.title.lower() for p in palabras)
             ]
-            lista_mostrar = noticias_filtradas[:5] if noticias_filtradas else feed.entries[:5]
+            lista_mostrar = noticias_filtradas[:5] if noticias_filtradas else entradas_rss[:5]
             for idx, entry in enumerate(lista_mostrar):
                 with st.expander(f"🔸 {entry.title}"):
                     resumen = getattr(entry, 'summary', 'Haz clic en el botón inferior para leer el despacho completo.')
                     st.markdown(resumen, unsafe_allow_html=True)
-                    st.link_button("Leer Noticia Completa", entry.link, key=f"btn_news_{idx}")
+                    st.link_button(f"Leer Noticia Completa en {fuente_activa}", entry.link, key=f"btn_news_{idx}")
         else:
-            st.warning("⚠️ No se pudo conectar con el servidor RSS en este instante. Intenta recargar en unos segundos.")
+            detalle_err = " | ".join(errores_rss) if errores_rss else "Sin respuesta de servidores"
+            st.error(f"⚠️ No se pudo conectar con ninguno de los 3 servidores RSS en este instante ({detalle_err}).")
 
     # =========================================================================
     # PESTAÑA 5: MANUAL DESCARGABLE, PINE SCRIPT TRADINGVIEW Y FEEDBACK
