@@ -77,13 +77,7 @@ crypto = st.sidebar.selectbox(
     ACTIVOS_PORTAFOLIO,
     index=0
 )
-anios_historial = st.sidebar.select_slider(
-    "Historial de Análisis (Años)",
-    options=[1, 2, 3, 5, 7, 10, "Máximo"],
-    value=5
-)
-# Conversión exacta a días naturales (cripto opera 365 días/año)
-history_days = 10000 if anios_historial == "Máximo" else anios_historial * 365
+history_days = 10000
 capital_total = st.sidebar.number_input("Capital Total del Portafolio ($)", min_value=100.0, value=100000.0, step=1000.0)
 riesgo_deseado = st.sidebar.slider("Porcentaje de Riesgo por Trade (%)", 0.1, 3.0, 1.0, step=0.1)
 
@@ -258,24 +252,52 @@ else:
         if filas_radar:
             st.table(pd.DataFrame(filas_radar))
 
-        # --- BLOQUE INFERIOR PESTAÑA 2: MODELO PREDICTIVO LSTM (PROYECCIÓN 7 DÍAS) ---
+                # --- BLOQUE INFERIOR PESTAÑA 2: MODELO PREDICTIVO LSTM (PROYECCIÓN 7 DÍAS) ---
         st.markdown("---")
         st.subheader(f"🤖 Proyección Neuronal LSTM — Horizonte 7 Días ({crypto})")
-        st.caption(f"Entrenamiento sobre {len(df)} velas diarias ({anios_historial} {'años' if anios_historial != 1 else 'año'}) con división temporal estricta (80% Train / 20% Test).")
-        if len(df) < 120:
+
+        col_lstm1, col_lstm2 = st.columns(2)
+        with col_lstm1:
+            anios_lstm = st.select_slider(
+                "Historial de Análisis LSTM (Años)",
+                options=[1, 2, 3, 5, 7, 10, "Máximo"],
+                value=5,
+                key="slider_anios_lstm"
+            )
+        with col_lstm2:
+            epochs_n = st.slider(
+                "Épocas de Entrenamiento LSTM",
+                min_value=5,
+                max_value=50,
+                value=15,
+                step=5,
+                key="slider_epochs_lstm"
+            )
+
+        # Recorte de historial exclusivo para la red neuronal (365 días naturales/año en cripto)
+        dias_lstm = 10000 if anios_lstm == "Máximo" else anios_lstm * 365
+        df_lstm = df.tail(dias_lstm)
+
+        st.caption(
+            f"Entrenamiento sobre **{len(df_lstm)} velas diarias** "
+            f"({anios_lstm} {'años' if anios_lstm != 1 else 'año'}) con división temporal estricta (80% Train / 20% Test)."
+        )
+
+        if len(df_lstm) < 120:
             st.warning("⚠️ Se requieren al menos 120 días de historial para entrenar la red neuronal LSTM.")
         else:
-            epochs_n = st.slider("Épocas de Entrenamiento LSTM", min_value=5, max_value=50, value=15, step=5, key="slider_epochs_lstm")
             if st.button("🔥 Ejecutar Proyección Predictiva 7 Días (LSTM)", key="btn_ia_7d_radar"):
-                with st.spinner(f"Entrenando red LSTM con {len(df)} jornadas históricas..."):
+                with st.spinner(f"Entrenando red LSTM con {len(df_lstm)} jornadas históricas..."):
                     np.random.seed(7)
                     tf.random.set_seed(7)
                     scaler = MinMaxScaler()
-                    data_values = df[["Close"]].values
+                    data_values = df_lstm[['Close']].values
                     split_idx = int(len(data_values) * 0.8)
+
                     # Ajuste exclusivo en muestra de entrenamiento (evita fuga de datos)
                     scaler.fit(data_values[:split_idx])
                     scaled_all = scaler.transform(data_values)
+
                     ventana = 60
                     X, y = [], []
                     for i in range(ventana, len(scaled_all)):
@@ -283,14 +305,16 @@ else:
                         y.append(scaled_all[i, 0])
                     X, y = np.array(X), np.array(y)
                     X = np.expand_dims(X, axis=-1)
+
                     model = Sequential([
                         LSTM(50, return_sequences=True, input_shape=(ventana, 1)),
                         Dropout(0.2),
                         LSTM(50),
                         Dense(1)
                     ])
-                    model.compile(optimizer="adam", loss="mse")
+                    model.compile(optimizer='adam', loss='mse')
                     model.fit(X, y, epochs=epochs_n, batch_size=32, verbose=0)
+
                     # Generación recursiva de los próximos 7 días
                     future_preds = []
                     current_batch = scaled_all[-ventana:].reshape(1, ventana, 1)
@@ -298,19 +322,21 @@ else:
                         p = model.predict(current_batch, verbose=0)
                         future_preds.append(p)
                         current_batch = np.append(current_batch[:, 1:, :], p.reshape(1, 1, 1), axis=1)
+
                     preds_7d = scaler.inverse_transform(np.array(future_preds).reshape(-1, 1)).flatten()
-                    f_dates = [df.index[-1] + pd.Timedelta(days=i) for i in range(1, 8)]
+                    f_dates = [df_lstm.index[-1] + pd.Timedelta(days=i) for i in range(1, 8)]
+
                     # Gráfico interactivo de proyección
                     fig_7d = go.Figure()
                     fig_7d.add_trace(go.Scatter(
-                        x=df.index[-30:], y=df["Close"].tail(30),
-                        mode="lines", name="Últimos 30 días reales",
-                        line=dict(color="#94A3B8", width=2)
+                        x=df_lstm.index[-30:], y=df_lstm['Close'].tail(30),
+                        mode='lines', name="Últimos 30 días reales",
+                        line=dict(color='#94A3B8', width=2)
                     ))
                     fig_7d.add_trace(go.Scatter(
                         x=f_dates, y=preds_7d,
-                        mode="lines+markers", name="Proyección LSTM (7D)",
-                        line=dict(color="#EF4444", width=3)
+                        mode='lines+markers', name="Proyección LSTM (7D)",
+                        line=dict(color='#EF4444', width=3)
                     ))
                     fig_7d.update_layout(
                         template="plotly_dark",
@@ -319,11 +345,12 @@ else:
                         margin=dict(l=10, r=10, t=40, b=10)
                     )
                     st.plotly_chart(fig_7d, use_container_width=True)
+
                     # Tabla detallada de precios estimados
                     pred_df = pd.DataFrame({
-                        "Fecha Estimada (UTC)": [d.strftime("%d/%m/%Y") for d in f_dates],
-                        "Precio Proyectado ($)": [f"${p:,.2f}" for p in preds_7d],
-                        "Variación vs Último Cierre": [f"{((p / precio_actual) - 1) * 100:+.2f}%" for p in preds_7d]
+                        'Fecha Estimada (UTC)': [d.strftime('%d/%m/%Y') for d in f_dates],
+                        'Precio Proyectado ($)': [f"${p:,.2f}" for p in preds_7d],
+                        'Variación vs Último Cierre': [f"{((p / precio_actual) - 1) * 100:+.2f}%" for p in preds_7d]
                     })
                     st.table(pred_df)
 
