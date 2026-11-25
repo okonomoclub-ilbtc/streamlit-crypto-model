@@ -429,78 +429,97 @@ else:
         else:
             st.warning("No hay suficientes velas en el rango seleccionado para generar la comparativa IS/OOS.")
 
-    # =========================================================================
-    # PESTAÑA 4: NOTICIAS RECTORAS EN TIEMPO REAL (GOOGLE NEWS RSS + CRYPTOCOMPARE API)
+        # =========================================================================
+    # PESTAÑA 4: NOTICIAS RECTORAS EN TIEMPO REAL (BINANCE NEWS API + GOOGLE NEWS RSS)
     # =========================================================================
     with tab4:
-        st.subheader(f"📰 Despachos del Mercado y Fundamentales: {crypto}")
+        import urllib.parse
+        st.subheader(f"📰 Despachos Oficiales del Mercado y Fundamentales: {crypto}")
 
         ticker_base = crypto.split('-')[0].lower()
-        busquedas_google = {
-            "btc": "Bitcoin+OR+BTC+crypto",
-            "eth": "Ethereum+OR+ETH+crypto",
-            "sol": "Solana+OR+SOL+crypto",
-            "xrp": "XRP+OR+Ripple+crypto"
+        nombres_clave = {
+            "btc": ["btc", "bitcoin"],
+            "eth": ["eth", "ethereum"],
+            "sol": ["sol", "solana"],
+            "xrp": ["xrp", "ripple"]
         }
-        query_gn = busquedas_google.get(ticker_base, f"{ticker_base}+cryptocurrency")
+        palabras = nombres_clave.get(ticker_base, [ticker_base, "crypto", "market"])
 
         @st.cache_data(ttl=900)
-        def obtener_noticias_cascada(q_google: str, moneda: str):
+        def obtener_noticias_binance_y_respaldo(moneda: str, keywords: tuple):
             errores = []
-            # 1. Google News RSS (Infraestructura Google: 0 bloqueos en Streamlit Cloud)
-            url_gn = f"https://google.com{q_google}+when:2d&hl=en-US&gl=US&ceid=US:en"
-            try:
-                parsed = feedparser.parse(url_gn)
-                if getattr(parsed, "entries", None) and len(parsed.entries) > 0:
-                    noticias = []
-                    for e in parsed.entries[:6]:
-                        fuente_nombre = e.source.title if hasattr(e, "source") and hasattr(e.source, "title") else "Google News"
-                        noticias.append({
-                            "titulo": e.title,
-                            "resumen": f"Medio original: **{fuente_nombre}** · Publicado: {getattr(e, 'published', 'Reciente')}",
-                            "link": e.link,
-                            "fuente": fuente_nombre
-                        })
-                    return "Google News (Medios Verificados)", noticias, []
-                else:
-                    errores.append("Google News RSS: sin entradas")
-            except Exception as e:
-                errores.append(f"Google News RSS: {type(e).__name__}")
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "application/json, text/plain, */*"
+            }
 
-            # 2. Respaldo API JSON abierta de CryptoCompare (sin API Key)
-            url_cc = f"https://cryptocompare.com{moneda.upper()}"
+            # 1. Endpoint JSON Público Oficial de Binance (Catálogo de Noticias y Anuncios)
+            url_binance = "https://binance.com"
             try:
-                r_cc = requests.get(url_cc, timeout=8)
-                if r_cc.status_code == 200:
-                    data_cc = r_cc.json().get("Data", [])
-                    if data_cc:
-                        noticias = []
-                        for item in data_cc[:6]:
-                            noticias.append({
-                                "titulo": item.get("title", ""),
-                                "resumen": item.get("body", "")[:280] + "...",
-                                "link": item.get("url", ""),
-                                "fuente": item.get("source_info", {}).get("name", "CryptoCompare")
+                r_bin = requests.get(url_binance, headers=headers, timeout=8)
+                if r_bin.status_code == 200:
+                    data_json = r_bin.json()
+                    catalogos = data_json.get("data", {}).get("catalogs", [])
+                    articulos = []
+                    for cat in catalogos:
+                        for art in cat.get("articles", []):
+                            titulo = art.get("title", "")
+                            codigo = art.get("code", "")
+                            ts_ms = art.get("releaseDate", 0)
+                            fecha_str = datetime.fromtimestamp(ts_ms / 1000.0, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC") if ts_ms else "Reciente"
+                            slug = "".join(c if c.isalnum() or c == " " else "" for c in titulo).strip().replace(" ", "-")
+                            link_art = f"https://www.binance.com/en/support/announcement/{slug}-{codigo}" if codigo else "https://binance.com"
+                            articulos.append({
+                                "titulo": titulo,
+                                "resumen": f"Despacho oficial de **Binance** · Publicado: `{fecha_str}`",
+                                "link": link_art,
+                                "fuente": "Binance Oficial"
                             })
-                        return "CryptoCompare News API", noticias, []
+                    if articulos:
+                        filtrados = [a for a in articulos if any(k in a["titulo"].lower() for k in keywords)]
+                        seleccion = filtrados[:6] if filtrados else articulos[:6]
+                        return "Binance News & Announcements (JSON API)", seleccion, []
                 else:
-                    errores.append(f"CryptoCompare API: HTTP {r_cc.status_code}")
+                    errores.append(f"Binance API: HTTP {r_bin.status_code}")
             except Exception as e:
-                errores.append(f"CryptoCompare API: {type(e).__name__}")
+                errores.append(f"Binance API: {type(e).__name__}")
+
+            # 2. Respaldo: Google News RSS con URL correctamente codificada
+            query_codificada = urllib.parse.quote(f"{moneda.upper()} cryptocurrency when:2d")
+            url_gn = f"https://google.com{query_codificada}&hl=en-US&gl=US&ceid=US:en"
+            try:
+                r_gn = requests.get(url_gn, headers=headers, timeout=8)
+                if r_gn.status_code == 200 and r_gn.content:
+                    parsed = feedparser.parse(r_gn.content)
+                    if getattr(parsed, "entries", None) and len(parsed.entries) > 0:
+                        noticias = []
+                        for e in parsed.entries[:6]:
+                            fuente_nombre = e.source.title if hasattr(e, "source") and hasattr(e.source, "title") else "Google News"
+                            noticias.append({
+                                "titulo": e.title,
+                                "resumen": f"Medio verificado: **{fuente_nombre}** · {getattr(e, 'published', 'Reciente')}",
+                                "link": e.link,
+                                "fuente": fuente_nombre
+                            })
+                        return "Google News (Medios Verificados)", noticias, []
+                else:
+                    errores.append(f"Google News: HTTP {r_gn.status_code}")
+            except Exception as e:
+                errores.append(f"Google News: {type(e).__name__}")
 
             return None, [], errores
 
-        fuente_activa, lista_noticias, errores_rss = obtener_noticias_cascada(query_gn, ticker_base)
+        fuente_activa, lista_noticias, errores_rss = obtener_noticias_binance_y_respaldo(ticker_base, tuple(palabras))
 
         if lista_noticias:
-            st.caption(f"Fuente en vivo verificada: **{fuente_activa}** · Filtrado para **{crypto}** (caché 15 min)")
+            st.caption(f"Fuente en vivo verificada: **{fuente_activa}** · Activo: **{crypto}** (caché 15 min)")
             for idx, item in enumerate(lista_noticias):
                 with st.expander(f"🔸 {item['titulo']}"):
                     st.markdown(item['resumen'], unsafe_allow_html=True)
-                    st.link_button(f"Leer Noticia en {item['fuente']}", item['link'], key=f"btn_news_{idx}")
+                    st.link_button(f"Abrir despacho en {item['fuente']}", item['link'], key=f"btn_news_{idx}")
         else:
             detalle_err = " | ".join(errores_rss) if errores_rss else "Sin respuesta de servidores"
-            st.error(f"⚠️ No se pudo conectar con los proveedores de noticias en este instante ({detalle_err}).")
+            st.error(f"⚠️ No se pudo conectar con los servidores de noticias en este instante ({detalle_err}).")
 
     # =========================================================================
     # PESTAÑA 5: MANUAL DESCARGABLE, PINE SCRIPT TRADINGVIEW Y FEEDBACK
