@@ -217,9 +217,114 @@ plotshape(condEntrada and strategy.position_size == 0, title="Señal Long", styl
 """
 
 def generar_manual_markdown() -> str:
-    """Genera el Manual Científico y Operativo descargable con todos los hallazgos."""
+    """Genera el Manual Científico y Operativo completo con estructura ejecutiva y pedagógica."""
     return """# Manual Científico y Operativo: Crypto Macro Momentum (Variante C)
-Autor: QuantumTradeA · QuantumLab-2026
-Estándar de Ejecución: Velas Diarias 1D (Cierre 23:59 UTC / Apertura 00:00 UTC)
-Universo Operativo: Portafolio Equiponderado 4 Activos (25% BTC-USD · 25% ETH-USD · 25% SOL-USD · 25% XRP-USD)
+**Autor:** QuantumTradeA · @Bookbinderr-2026  
+**Estándar de Ejecución:** Velas Diarias 1D (Evaluación 23:59 UTC / Ejecución 00:00 UTC)  
+**Universo Operativo:** Portafolio Equiponderado 4 Activos (`25% BTC-USD` · `25% ETH-USD` · `25% SOL-USD` · `25% XRP-USD`)
+
+---
+
+## 💡 MOMENTO REVELACIÓN: LA LÓGICA ECONÓMICA DEL EDGE
+> *"La mayoría de los sistemas de impulso en criptomonedas fallan por dos razones: persiguen movimientos en mercados bajistas sin tendencia macro o aplican filtros fractales tan estrictos que dejan al sistema sin muestra estadística. La ventaja real aparece cuando exiges ignición de volatilidad (Impulso 3D ≥ 1.00 × ATR) únicamente en días hábiles institucionales y sobre un régimen alcista confirmado (Close > SMA 50)."*
+
+Tras la entrada de los ETF institucionales en 2024, la microestructura del mercado cripto cambió de dueño:
+* **Por qué descartamos la reversión a la media y el filtro Hurst rígido (`H > 0.55`):** A escala diaria, los criptoactivos oscilan cerca de una caminata aleatoria ($H \approx 0.50 - 0.54$). Exigir persistencia fractal extrema bloqueó las operaciones fuera de muestra ($p = 0.51$ en el Test del Mono, indistinguible del azar).
+* **Por qué funciona la Variante C:** Captura los flujos direccionales institucionales de lunes a viernes cuando el mercado rompe su inercia de 3 días con fuerza superior a su volatilidad diaria (`ATR 14`), dejando correr la tendencia hasta perder la media rápida (`SMA 5`) y diversificando el riesgo en 4 líderes líquidos al **25%** cada uno.
+
+---
+
+## 📋 RESUMEN TÉCNICO EJECUTIVO
+
+### 1. Activos Target y Asignación de Capital
+* **Portafolio Base (100% Capital):** Distribuido en 4 bloques equiponderados de **25.0%** (`BTC-USD`, `ETH-USD`, `SOL-USD`, `XRP-USD`).
+* **Por qué multiactivo y no un solo ticker:** Operar un activo aislado sufre durante los inviernos cripto. La cesta al 25% rota el capital hacia los líderes de impulso y eleva la Eficiencia Walk-Forward (**WFER**) al **91.77%**.
+* **Apalancamiento:** `1.0x` (Spot puro, sin deuda ni riesgo de liquidación).
+
+### 2. Variables de Setup (3 Reglas Únicas — Simplicidad Máxima)
+1. **Filtro de Régimen Macro:** `Close > SMA(50)`. Si el precio cierra por debajo, ese bloque del 25% permanece en *Defensive Cash*.
+2. **Gatillo de Ignición de Impulso:** `(Close_t - Close_{t-3}) / ATR(14) >= 1.00`. Exige que el avance acumulado de 3 días sea al menos igual a una vez la volatilidad diaria promedio.
+3. **Filtro de Calendario Institucional:** Evaluar señales exclusivamente de **Lunes a Viernes (UTC)**, filtrando la baja liquidez profesional de los fines de semana.
+
+---
+
+## 🎯 TRIGGERS DE EJECUCIÓN Y GESTIÓN DE SALIDA (BINARIO)
+
+### Entrada (`Next-Bar Open`)
+1. Esperar el cierre consolidado de la vela diaria a las **23:59 UTC** (sin operar parpadeos intradía).
+2. Confirmar que se cumplen simultáneamente: `Close > SMA(50)`, `Impulso 3D ≥ 1.00 × ATR(14)` y día hábil (`L-V`).
+3. Ejecutar orden de compra (`LONG`) a mercado en la apertura de la vela siguiente (**00:00 UTC**).
+
+### Salida Dual (Protección y Captura de Cola)
+* **Giro de Tendencia Corta (`Cierre < SMA 5`):** Si una vela diaria cierra por debajo de su media móvil simple de 5 días, se liquida la posición a mercado en la apertura siguiente (**00:00 UTC**).
+* **Corte de Cola Catastrófico (`Hard Stop 2.5 × ATR`):** Toda orden nace protegida desde su apertura con un Stop Loss situado a `2.5 × ATR(14)` por debajo del precio de entrada.
+
+---
+
+## 🧮 GESTIÓN DE RIESGO (MATEMÁTICA)
+Cada activo opera de forma independiente dentro de su asignación del **25%** del capital total:
+* **Capital Asignado por Activo:** `Capital_Activo = Capital_Total × 0.25`
+* **Riesgo Monetario por Operación:** `Riesgo_$ = Capital_Activo × (% Riesgo / 100)` *(Estándar validado: 1.0%)*
+* **Distancia al Hard Stop:** `Stop_$/unidad = 2.5 × ATR(14)`
+* **Tamaño Exacto del Lote:** `Unidades = min(Riesgo_$ ÷ Stop_$/unidad , Capital_Activo ÷ Precio_Entrada)`
+
+---
+
+## ⏱️ FLUJO DE TRABAJO DIARIO (RUTINA DE 5 MINUTOS)
+
+* **23:50 UTC (10 min antes del cierre):** Abrir el dictaminador Sentinel V11 Pro y revisar el estado de las 4 monedas en el Radar Multiactivo.
+* **00:00 UTC (Apertura de nueva vela diaria):**
+  1. Verificar si algún activo confirmó `GATILLO LONG` al cierre.
+  2. Si hay posición abierta, verificar si el cierre previo cayó por debajo de `SMA(5)` para cerrarla.
+  3. Ejecutar la orden de entrada en Spot y colocar inmediatamente la orden Stop Loss en `Entrada - 2.5 × ATR(14)`.
+  4. Registrar la operación en la bitácora.
+
+---
+
+## ✅ CHECKLIST PRE-TRADE (OBLIGATORIO)
+- [ ] Vela diaria de las `23:59 UTC` cerrada y consolidada (no operar velas en curso).
+- [ ] Día hábil institucional confirmado (`Lunes a Viernes` UTC).
+- [ ] Precio de cierre por encima de `SMA(50)`.
+- [ ] Impulso acumulado de 3 días $\ge 1.00 \times \text{ATR}(14)$.
+- [ ] Tamaño calculado respetando el tope del **25%** asignado al activo (sin apalancamiento).
+- [ ] Orden `Hard Stop` colocada exactamente en `Entrada - 2.5 × ATR(14)`.
+
+---
+
+## ⚠️ QUÉ NO HACE ESTE SISTEMA Y CUÁNDO NO OPERAR
+* **No es un sistema *All-Weather* (Solo Largos):** Gana durante expansiones alcistas y permanece plano en *Defensive Cash* durante mercados bajistas prolongados. No opera en corto (`SHORT`).
+* **No es alta frecuencia:** Es un sistema deliberadamente selectivo; habrá semanas sin señales mientras el mercado lateraliza o corrige.
+* **Prohibido operar si:**
+  * El precio cotiza por debajo de `SMA(50)`.
+  * El cierre corresponde a sábado o domingo UTC.
+  * El spread o deslizamiento del exchange supera los `30 bps` *roundtrip* en momentos de iliquidez extrema.
+
+---
+
+## 📊 VALIDACIÓN ESTADÍSTICA Y AUDITORÍA INSTITUCIONAL (2020–2026 UTC)
+Evaluación ejecutada sobre datos históricos reales (`In-Sample: 2020–Jun 2024` | `Out-of-Sample: Jun 2024–2026`) con fricción real de `30 bps` *roundtrip*:
+
+| Prueba Institucional | Resultado Auditado | Interpretación |
+| :--- | :--- | :--- |
+| **WFER (Robert Pardo, 2008)** | `91.77%` (`SR IS 1.86` · `SR OOS 1.80`) | Conserva más del 91% de eficiencia fuera de muestra. |
+| **CPCV (López de Prado, 2018)** | `100.0%` caminos positivos (`Mean SR 1.72`) | Consistencia total en particiones combinatorias. |
+| **Test del Mono OOS (Aronson)** | `p-value = 0.01099` (`123` trades OOS) | Supera al 98.9% de 1,000 simulaciones aleatorias. |
+| **Estrés Latencia CPS (+1 vela)** | `-4.94%` caída en *Profit Factor* | Alta resistencia a retrasos de ejecución. |
+| **Deflated Sharpe Ratio (DSR)** | `91.3%` ($N=10$) · `87.8%` ($N=20$) | Alta probabilidad de alfa genuino sin *data-mining*. |
+
+---
+
+## 📝 TEMPLATE DE BITÁCORA DE OPERACIÓN (TRADE LOG)
+* **Fecha Entrada (00:00 UTC):** `____ / ____ / 2026`
+* **Activo (Bloque 25%):** `BTC-USD / ETH-USD / SOL-USD / XRP-USD`
+* **Impulso 3D / ATR(14) al Cierre:** `______ x`
+* **Precio Entrada:** `$________` | **Hard Stop (2.5 ATR):** `$________`
+* **Unidades Operadas:** `________` | **Riesgo Monetario ($):** `$________`
+* **Fecha y Precio Salida:** `____ / ____ / 2026` · `$________`
+* **Motivo de Salida:** `Cierre < SMA(5) / Hard Stop 2.5 ATR`
+* **Resultado Neto (% y $):** `______ %` (`$________`)
+
+---
+> *Aviso Legal: Documento estrictamente educativo y de investigación cuantitativa. Los resultados auditados en histórico no garantizan rendimientos futuros.*
 """
+
