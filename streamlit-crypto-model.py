@@ -579,7 +579,7 @@ else:
 
         # --- PIE DE PÁGINA: CREDENCIALES ---
         st.markdown("---")
-        st.markdown("🛡️ QuantumTradeA 2026 | Desarrollado con rigor por @QuantLab-2026", unsafe_allow_html=True)
+        st.markdown("🛡️ QuantumTradeA 2026 | Desarrollado con rigor por QuantLab-2026-thebookbinderr", unsafe_allow_html=True)
         st.markdown(
             "🚨 NOTA MARGINAL DE DESCARGO LEGAL: Esta aplicación web interactiva ha sido construida con fines estrictamente educativos, "
             "didácticos y de investigación estadística avanzada bajo la metodología de la ingeniería cuantitativa. Ninguno de los datos, alertas o "
