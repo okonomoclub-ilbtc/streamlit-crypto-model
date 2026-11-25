@@ -429,96 +429,74 @@ else:
         else:
             st.warning("No hay suficientes velas en el rango seleccionado para generar la comparativa IS/OOS.")
 
-        # =========================================================================
-    # PESTAÑA 4: NOTICIAS RECTORAS EN TIEMPO REAL (GOOGLE NEWS RSS + REDDIT JSON)
+    # =========================================================================
+    # PESTAÑA 4: NOTICIAS RECTORAS (COINDESK OFICIAL + RESPALDO GOOGLE NEWS)
     # =========================================================================
     with tab4:
         import urllib.parse
-        st.subheader(f"📰 Despachos Oficiales del Mercado y Fundamentales: {crypto}")
-
-        ticker_base = crypto.split('-')[0].lower()
-        busquedas_map = {
-            "btc": ("Bitcoin BTC crypto", "Bitcoin"),
-            "eth": ("Ethereum ETH crypto", "ethereum"),
-            "sol": ("Solana SOL crypto", "solana"),
-            "xrp": ("XRP Ripple crypto", "Ripple")
-        }
-        consulta_texto, subreddit_activo = busquedas_map.get(ticker_base, (f"{ticker_base.upper()} crypto", "CryptoCurrency"))
+        st.subheader(f"📰 Despachos del Mercado y Fundamentales: {crypto}")
 
         @st.cache_data(ttl=900)
-        def obtener_noticias_nube(consulta: str, sub: str):
-            errores = []
-            headers = {
-                "User-Agent": "Mozilla/5.0 (compatible; QuantLabSentinel/11.0; +https://streamlit.io)"
-            }
+        def cargar_noticias_coindesk():
+            # URL canónica exacta extraída del XML oficial de CoinDesk (sin '/' final)
+            rss_url = "https://www.coindesk.com/arc/outboundfeeds/rss"
+            feed = feedparser.parse(rss_url)
+            if getattr(feed, "entries", None) and len(feed.entries) > 0:
+                return "CoinDesk", [
+                    {
+                        "titulo": e.title,
+                        "resumen": getattr(e, "summary", getattr(e, "description", "Despacho oficial de CoinDesk disponible en el enlace inferior.")),
+                        "link": e.link,
+                        "fecha": getattr(e, "published", "")
+                    }
+                    for e in feed.entries
+                ]
+            return None, []
 
-            # 1. Google News RSS (Infraestructura Google - Sin bloqueo de IP en Streamlit Cloud)
-            q_encoded = urllib.parse.quote(f"{consulta} when:3d")
-            url_gn = f"https://google.com{q_encoded}&hl=en-US&gl=US&ceid=US:en"
-            try:
-                r_gn = requests.get(url_gn, headers=headers, timeout=8)
-                if r_gn.status_code == 200 and r_gn.content:
-                    parsed = feedparser.parse(r_gn.content)
-                    if getattr(parsed, "entries", None) and len(parsed.entries) > 0:
-                        noticias = []
-                        for e in parsed.entries[:6]:
-                            fuente_nombre = e.source.title if hasattr(e, "source") and hasattr(e.source, "title") else "Google News"
-                            fecha_pub = getattr(e, "published", "Reciente")
-                            noticias.append({
-                                "titulo": e.title,
-                                "resumen": f"Medio original: **{fuente_nombre}** · Publicado: `{fecha_pub}`",
-                                "link": e.link,
-                                "fuente": fuente_nombre
-                            })
-                        return "Google News (Medios Financieros Verificados)", noticias, []
-                    else:
-                        errores.append("Google News: feed sin entradas")
-                else:
-                    errores.append(f"Google News: HTTP {r_gn.status_code}")
-            except Exception as e:
-                errores.append(f"Google News: {type(e).__name__}")
+        @st.cache_data(ttl=900)
+        def cargar_noticias_respaldo_gn(moneda: str):
+            q = urllib.parse.quote(f"{moneda.upper()} crypto when:2d")
+            url_gn = f"https://google.com{q}&hl=en-US&gl=US&ceid=US:en"
+            feed_gn = feedparser.parse(url_gn)
+            if getattr(feed_gn, "entries", None) and len(feed_gn.entries) > 0:
+                return "Google News", [
+                    {
+                        "titulo": e.title,
+                        "resumen": f"Publicado: {getattr(e, 'published', 'Reciente')}",
+                        "link": e.link,
+                        "fecha": getattr(e, "published", "")
+                    }
+                    for e in feed_gn.entries
+                ]
+            return None, []
 
-            # 2. Respaldo: Feed JSON público de comunidad/mercado
-            url_red = f"https://reddit.com{sub}/hot.json?limit=8"
-            try:
-                r_red = requests.get(url_red, headers=headers, timeout=8)
-                if r_red.status_code == 200:
-                    posts = r_red.json().get("data", {}).get("children", [])
-                    noticias = []
-                    for p in posts:
-                        d = p.get("data", {})
-                        if d.get("stickied"):
-                            continue
-                        ts = d.get("created_utc", 0)
-                        fecha_utc = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC") if ts else "Reciente"
-                        noticias.append({
-                            "titulo": d.get("title", ""),
-                            "resumen": f"Canal: **r/{sub}** · Publicado: `{fecha_utc}`",
-                            "link": f"https://reddit.com{d.get('permalink', '')}",
-                            "fuente": f"r/{sub}"
-                        })
-                        if len(noticias) >= 6:
-                            break
-                    if noticias:
-                        return f"Mercado en Vivo (r/{sub})", noticias, []
-                else:
-                    errores.append(f"Respaldo JSON: HTTP {r_red.status_code}")
-            except Exception as e:
-                errores.append(f"Respaldo JSON: {type(e).__name__}")
+        ticker_base = crypto.split('-')[0].lower()
+        nombres_clave = {
+            "btc": ["btc", "bitcoin"],
+            "eth": ["eth", "ethereum", "ether"],
+            "sol": ["sol", "solana"],
+            "xrp": ["xrp", "ripple"]
+        }
+        palabras = nombres_clave.get(ticker_base, [ticker_base, "crypto", "bitcoin"])
 
-            return None, [], errores
+        fuente_nombre, entradas = cargar_noticias_coindesk()
+        if not entradas:
+            fuente_nombre, entradas = cargar_noticias_respaldo_gn(ticker_base)
 
-        fuente_activa, lista_noticias, errores_rss = obtener_noticias_nube(consulta_texto, subreddit_activo)
+        if entradas:
+            st.caption(f"Fuente verificada en vivo: **{fuente_nombre}** · Actualización cada 15 min")
+            filtradas = [
+                item for item in entradas
+                if any(p in item["titulo"].lower() for p in palabras)
+            ]
+            lista_final = filtradas[:5] if filtradas else entradas[:5]
 
-        if lista_noticias:
-            st.caption(f"Fuente en vivo verificada: **{fuente_activa}** · Activo: **{crypto}** (caché 15 min)")
-            for idx, item in enumerate(lista_noticias):
+            for i, item in enumerate(lista_final):
                 with st.expander(f"🔸 {item['titulo']}"):
-                    st.markdown(item['resumen'], unsafe_allow_html=True)
-                    st.link_button(f"Leer despacho en {item['fuente']}", item['link'], key=f"btn_news_{idx}")
+                    st.write(item["resumen"])
+                    st.link_button(f"Leer Noticia Completa en {fuente_nombre}", item["link"], key=f"ln_news_{i}")
         else:
-            detalle_err = " | ".join(errores_rss) if errores_rss else "Sin respuesta de servidores"
-            st.error(f"⚠️ No se pudo conectar con los servidores de noticias en este instante ({detalle_err}).")
+            st.warning("⚠️ No se pudo conectar con los servidores RSS en este instante. Intenta recargar en unos segundos.")
 
     # =========================================================================
     # PESTAÑA 5: MANUAL DESCARGABLE, PINE SCRIPT TRADINGVIEW Y FEEDBACK
