@@ -282,7 +282,7 @@ else:
                         y.append(scaled_all[i, 0])
                     
                     X, y = np.array(X), np.array(y)
-                    X = np.reshape(X, (X.shape, X.shape, 1))
+                    X = np.expand_dims(X, axis=-1)
 
                     model = Sequential([
                         LSTM(50, return_sequences=True, input_shape=(ventana, 1)),
