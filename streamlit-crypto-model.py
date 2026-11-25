@@ -264,7 +264,9 @@ else:
 
         if len(df) < 120:
             st.warning("⚠️ Se requieren al menos 120 días de historial para entrenar la red neuronal LSTM.")
-        else:
+                else:
+            epochs_n = st.slider("Épocas de Entrenamiento LSTM", min_value=5, max_value=50, value=15, step=5, key="slider_epochs_lstm")
+
             if st.button("🔥 Ejecutar Proyección Predictiva 7 Días (LSTM)", key="btn_ia_7d_radar"):
                 with st.spinner(f"Entrenando red LSTM con {len(df)} jornadas históricas..."):
                     scaler = MinMaxScaler()
