@@ -429,66 +429,78 @@ else:
         else:
             st.warning("No hay suficientes velas en el rango seleccionado para generar la comparativa IS/OOS.")
 
-        # =========================================================================
-    # PESTAÑA 4: NOTICIAS RECTORAS EN TIEMPO REAL (CASCADA RSS REAL)
+    # =========================================================================
+    # PESTAÑA 4: NOTICIAS RECTORAS EN TIEMPO REAL (GOOGLE NEWS RSS + CRYPTOCOMPARE API)
     # =========================================================================
     with tab4:
         st.subheader(f"📰 Despachos del Mercado y Fundamentales: {crypto}")
 
+        ticker_base = crypto.split('-')[0].lower()
+        busquedas_google = {
+            "btc": "Bitcoin+OR+BTC+crypto",
+            "eth": "Ethereum+OR+ETH+crypto",
+            "sol": "Solana+OR+SOL+crypto",
+            "xrp": "XRP+OR+Ripple+crypto"
+        }
+        query_gn = busquedas_google.get(ticker_base, f"{ticker_base}+cryptocurrency")
+
         @st.cache_data(ttl=900)
-        def obtener_noticias_cascada():
-            fuentes_rss = [
-                ("CoinDesk", "https://coindesk.com"),
-                ("Decrypt", "https://decrypt.co"),
-                ("CryptoSlate", "https://cryptoslate.com"),
-            ]
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                              "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8"
-            }
+        def obtener_noticias_cascada(q_google: str, moneda: str):
             errores = []
-            for nombre, url in fuentes_rss:
-                try:
-                    resp = requests.get(url, headers=headers, timeout=8)
-                    if resp.status_code == 200 and resp.content:
-                        parsed = feedparser.parse(resp.content)
-                        if getattr(parsed, "entries", None) and len(parsed.entries) > 0:
-                            return nombre, parsed.entries, []
-                        else:
-                            errores.append(f"{nombre}: respuesta vacía")
-                    else:
-                        errores.append(f"{nombre}: HTTP {resp.status_code}")
-                except Exception as e:
-                    errores.append(f"{nombre}: {type(e).__name__}")
+            # 1. Google News RSS (Infraestructura Google: 0 bloqueos en Streamlit Cloud)
+            url_gn = f"https://google.com{q_google}+when:2d&hl=en-US&gl=US&ceid=US:en"
+            try:
+                parsed = feedparser.parse(url_gn)
+                if getattr(parsed, "entries", None) and len(parsed.entries) > 0:
+                    noticias = []
+                    for e in parsed.entries[:6]:
+                        fuente_nombre = e.source.title if hasattr(e, "source") and hasattr(e.source, "title") else "Google News"
+                        noticias.append({
+                            "titulo": e.title,
+                            "resumen": f"Medio original: **{fuente_nombre}** · Publicado: {getattr(e, 'published', 'Reciente')}",
+                            "link": e.link,
+                            "fuente": fuente_nombre
+                        })
+                    return "Google News (Medios Verificados)", noticias, []
+                else:
+                    errores.append("Google News RSS: sin entradas")
+            except Exception as e:
+                errores.append(f"Google News RSS: {type(e).__name__}")
+
+            # 2. Respaldo API JSON abierta de CryptoCompare (sin API Key)
+            url_cc = f"https://cryptocompare.com{moneda.upper()}"
+            try:
+                r_cc = requests.get(url_cc, timeout=8)
+                if r_cc.status_code == 200:
+                    data_cc = r_cc.json().get("Data", [])
+                    if data_cc:
+                        noticias = []
+                        for item in data_cc[:6]:
+                            noticias.append({
+                                "titulo": item.get("title", ""),
+                                "resumen": item.get("body", "")[:280] + "...",
+                                "link": item.get("url", ""),
+                                "fuente": item.get("source_info", {}).get("name", "CryptoCompare")
+                            })
+                        return "CryptoCompare News API", noticias, []
+                else:
+                    errores.append(f"CryptoCompare API: HTTP {r_cc.status_code}")
+            except Exception as e:
+                errores.append(f"CryptoCompare API: {type(e).__name__}")
+
             return None, [], errores
 
-        fuente_activa, entradas_rss, errores_rss = obtener_noticias_cascada()
+        fuente_activa, lista_noticias, errores_rss = obtener_noticias_cascada(query_gn, ticker_base)
 
-        ticker_base = crypto.split('-')[0].lower()
-        nombres_clave = {
-            "btc": ["btc", "bitcoin"],
-            "eth": ["eth", "ethereum"],
-            "sol": ["sol", "solana"],
-            "xrp": ["xrp", "ripple"]
-        }
-        palabras = nombres_clave.get(ticker_base, [ticker_base, "crypto", "market"])
-
-        if entradas_rss:
-            st.caption(f"Fuente RSS en vivo verificada: **{fuente_activa}** (caché 15 min)")
-            noticias_filtradas = [
-                e for e in entradas_rss
-                if any(p in e.title.lower() for p in palabras)
-            ]
-            lista_mostrar = noticias_filtradas[:5] if noticias_filtradas else entradas_rss[:5]
-            for idx, entry in enumerate(lista_mostrar):
-                with st.expander(f"🔸 {entry.title}"):
-                    resumen = getattr(entry, 'summary', 'Haz clic en el botón inferior para leer el despacho completo.')
-                    st.markdown(resumen, unsafe_allow_html=True)
-                    st.link_button(f"Leer Noticia Completa en {fuente_activa}", entry.link, key=f"btn_news_{idx}")
+        if lista_noticias:
+            st.caption(f"Fuente en vivo verificada: **{fuente_activa}** · Filtrado para **{crypto}** (caché 15 min)")
+            for idx, item in enumerate(lista_noticias):
+                with st.expander(f"🔸 {item['titulo']}"):
+                    st.markdown(item['resumen'], unsafe_allow_html=True)
+                    st.link_button(f"Leer Noticia en {item['fuente']}", item['link'], key=f"btn_news_{idx}")
         else:
             detalle_err = " | ".join(errores_rss) if errores_rss else "Sin respuesta de servidores"
-            st.error(f"⚠️ No se pudo conectar con ninguno de los 3 servidores RSS en este instante ({detalle_err}).")
+            st.error(f"⚠️ No se pudo conectar con los proveedores de noticias en este instante ({detalle_err}).")
 
     # =========================================================================
     # PESTAÑA 5: MANUAL DESCARGABLE, PINE SCRIPT TRADINGVIEW Y FEEDBACK
