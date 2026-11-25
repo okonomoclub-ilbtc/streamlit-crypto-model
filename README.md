@@ -1,48 +1,72 @@
-# 🚀 AI Crypto Strategist & Dictaminador Sentinel V10 Pro
+# 🚀 Estratega de Criptomonedas con IA y Dictaminador Sentinel V11 Pro
 
-Entorno web cuantitativo avanzado para la auditoría, análisis estacional y proyección predictiva de criptoactivos (BTC, ETH, SOL) en tiempo real. Este ecosistema de simulación fue diseñado bajo un estándar riguroso para eliminar el sesgo de la fe y validar la robustez matemática de las reglas lógicas antes de arriesgar capital en vivo.
+Entorno web cuantitativo avanzado para la auditoría estadística, radar multiactivo y proyección predictiva de criptoactivos (**BTC-USD, ETH-USD, SOL-USD y XRP-USD**) en tiempo real. Este ecosistema fue diseñado bajo estándares institucionales para eliminar el sesgo discrecional, erradicar cualquier dato estático y validar la robustez matemática de las reglas antes de asignar capital.
 
-**Desarrollado por:** [@Bookbinderr-2026](https://x.com) | **Comunidad Oficial:** [QuantumTradeA Telegram](https://t.me)
-
----
-
-## 🔬 Arquitectura Core: Sentinel V10 Pro (Copy Trading Edition)
-A diferencia de los sistemas minoristas sobreajustados, esta versión explota la microestructura e ineficiencias del mercado institucional moderno (Post-ETFs) mediante un extractor puro de momentum intradiario:
-
-1. **Filtro de Dirección Macro:** Media Móvil Exponencial (**EMA 50**). Define el sesgo institucional; solo se buscan compras en expansión alcista y ventas en compresión bajista.
-2. **Gatillo de Momentum Absoluto:** Retorno de 3 jornadas (**Retorno 3D ≥ ±3%**). Identifica puntos de fatiga estructural y sobreextensión del precio.
-3. **Cinturón de Seguridad Rígido:** Liquidación forzada por tiempo a las **24 horas exactas** (1 vela diaria). El bot elimina stop loss tradicionales y targets flotantes; mitiga barridas de liquidez institucional saliendo rápido del mercado.
-4. **Gestión Monetaria Eficiente:** Riesgo controlado al **0.5% del balance** indexado dinámicamente mediante la volatilidad real del **ATR(14)**. Techo de apalancamiento seguro limitado a 2.0x.
+**Desarrollado por:** QuantumLab [@thebookbinderr(https://x.com)] | **Comunidad Oficial:** [QuantumTradeA en Telegram](https://t.me)
 
 ---
 
-## 🤖 Componentes de Inteligencia Artificial y Estabilización Backend
-El sistema integra un motor predictivo basado en Redes Neuronales Recurrentes (**LSTM**) optimizado bajo metodologías de validación científica:
+## 🔬 Arquitectura Core: Sentinel V11 Pro (Variante C Validada)
 
-* **Split Temporal Antifuga (80/20):** El `MinMaxScaler` se ajusta exclusivamente con el tramo de entrenamiento, impidiendo que el modelo "vea" precios o mínimos futuros del tramo de testeo.
-* **Reproducibilidad Matemática:** Enforzamiento de semillas fijas (`SEED=7`) en NumPy y TensorFlow-CPU para garantizar que las proyecciones de 7 días sean idénticas y fidedignas en cualquier servidor.
-* **Filtro Informativo:** Conexión directa mediante canal RSS automatizado hacia Yahoo Finance para el monitoreo de titulares macroeconómicos globales.
-* **Webhook de Alertas:** Despacho automatizado de fichas de órdenes recomendadas hacia canales públicos de Telegram mediante pasarela API.
+A diferencia de los sistemas minoristas sobreajustados o basados en reversión a la media tradicional, esta versión explota la microestructura del mercado institucional moderno (**Post-ETFs**) mediante un motor modular desacoplado (`core_strategy.py`) que opera sobre una **cesta equiponderada (25% asignado a cada activo)**:
+
+* **Filtro de Dirección Macro (`Close > SMA 50`):** Define el sesgo tendencial institucional al cierre diario (`23:59 UTC`). Solo autoriza compras en expansión alcista; por debajo permanece en *Defensive Cash*.
+* **Gatillo de Ignición de Impulso (`Impulso 3D ≥ 1.00 × ATR 14`):** Exige que el avance acumulado de las últimas 3 jornadas supere al menos una vez la volatilidad diaria promedio (`ATR 14`), filtrando entradas en mercados laterales sin recorrido.
+* **Filtro de Calendario Institucional (`Lunes a Viernes`):** Opera exclusivamente en días hábiles UTC para evitar el ruido de baja liquidez profesional de los fines de semana.
+* **Salida Dinámica y Cinturón de Seguridad (`Cierre < SMA 5` / `Hard Stop 2.5 × ATR`):** Deja correr las expansiones tendenciales hasta que el precio pierde su media rápida de 5 días, protegiendo cada posición desde su apertura con un *Hard Stop* catastrófico a `2.5 × ATR(14)`.
+* **Ejecución Causal Realista (`Next-Bar Open`):** Evaluación estricta al cierre consolidado (`23:59 UTC`), ejecución en la apertura siguiente (`00:00 UTC`), exposición Spot `1.0x` (sin apalancamiento) y fricción simulada de `30 bps` *roundtrip* (`15 bps` por lado).
+
+---
+
+## 📊 Resultados de Auditoría y Batería de Tortura (2020–2026 UTC)
+
+Validación ejecutada en vivo sobre datos históricos reales (`In-Sample: 2020–Jun 2024` | `Out-of-Sample: Jun 2024–2026`) bajo portafolio equiponderado al 25%:
+
+| Prueba Institucional | Resultado Auditado | Dictamen |
+| :--- | :--- | :--- |
+| **WFER (Robert Pardo, 2008)** | `91.77%` (`SR IS = 1.86` · `SR OOS = 1.80`) | **PASS** |
+| **CPCV (López de Prado, 2018)** | `100.0%` caminos positivos (`Mean SR = 1.72`) | **PASS** |
+| **Test del Mono OOS (Aronson, 1,000 perm.)** | `p-value = 0.01099` (`123` operaciones OOS) | **PASS** |
+| **Estrés de Latencia CPS (+1 vela)** | `-4.94%` variación en *Profit Factor* | **PASS** |
+| **Deflated Sharpe Ratio (DSR)** | `91.3%` ($N=10$) · `87.8%` ($N=20$) | **PASS** |
+
+---
+
+## 🤖 Componentes de Inteligencia Artificial, Recursos Abiertos y Backend
+
+* **Red Neuronal Recurrente (`LSTM` — Horizonte 7 Días):** Integrada en la pestaña de Radar Multiactivo con selector configurable de historial y épocas, utilizando división temporal estricta (`80% Train / 20% Test`) donde el `MinMaxScaler` se ajusta exclusivamente sobre el tramo de entrenamiento para evitar fuga de datos (*data leakage*), con semillas fijas (`SEED = 7`) para reproducibilidad exacta.
+* **Backtest Forense Dinámico:** Simulación en tiempo real tanto del portafolio consolidado (4 criptos al 25% c/u) como del desglose individual por activo, descartando automáticamente la vela diaria en curso.
+* **Paridad TradingView (`Pine Script v6`) y Manual Descargable:** Descarga directa desde la interfaz del manual científico (`.md`) y del script equivalente en **Pine Script v6** (`.pine`) con exactitud matemática en `RMA ATR(14)` y calendario UTC.
+* **Canal Informativo y Alertas:** Lectura en caché de feeds RSS oficiales (**CoinDesk** con respaldo **Google News**) y despacho administrativo de señales hacia **Telegram** mediante `st.secrets`.
 
 ---
 
 ## 💻 Instrucciones para Despliegue Local
 
-1. Clona este repositorio de forma local en tu terminal de trabajo:
+1. **Clona este repositorio en tu máquina local:**
    ```bash
    git clone https://github.com
-   cd tu-repositorio
+   cd streamlit-crypto-model
    ```
 
-2. Instala el paquete de dependencias estandarizado:
+2. **Instala las dependencias estandarizadas:**
    ```bash
    pip install -r requirements.txt
    ```
 
-3. Ejecuta la interfaz gráfica interactiva de Streamlit:
+3. *(Opcional)* **Configura tus credenciales locales** creando `.streamlit/secrets.toml` (protegido por `.gitignore`):
+   ```toml
+   TELEGRAM_TOKEN = "tu_token_de_telegram"
+   TELEGRAM_CHAT_ID = "@quantumtradear"
+   MAINTENANCE_PASSWORD = "tu_clave_maestra"
+   ```
+
+4. **Ejecuta la aplicación interactiva de Streamlit:**
    ```bash
-   streamlit run app.py
+   streamlit run streamlit-crypto-model.py
    ```
 
 ---
-💡 **Aviso Legal de Investigación:** *Este software fue construido con fines puramente educativos e investigativos bajo la metodología walk-forward de la ingeniería cuantitativa. Los rendimientos pasados presentados en la tabla de robustez no garantizan retornos futuros.*
+
+> 💡 **Aviso Legal de Investigación:** Este software ha sido construido con fines estrictamente educativos, didácticos y de investigación estadística bajo metodologías cuantitativas. Ninguno de los datos, métricas o fichas de órdenes constituye asesoría financiera ni recomendación de inversión. Los rendimientos históricos auditados no garantizan resultados futuros.
+
